@@ -1,5 +1,6 @@
 plugins {
     id("java")
+    id("org.springframework.boot") version "4.1.1"
 }
 
 group = "org.example"
@@ -9,12 +10,91 @@ repositories {
     mavenCentral()
 }
 
+val springBootVersion = "4.1.1"
+
 dependencies {
-    testImplementation(platform("org.junit:junit-bom:6.0.0"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
+    implementation(platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
+
+    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-jdbc")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+
+    // Spring Boot 4 split the auto-configuration of Flyway into a dedicated module.
+    implementation("org.springframework.boot:spring-boot-flyway")
+    implementation("org.flywaydb:flyway-core")
+    implementation("org.flywaydb:flyway-database-postgresql")
+    runtimeOnly("org.postgresql:postgresql")
+
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    // Spring Boot 4 moved the MockMvc auto-configuration into a dedicated module.
+    testImplementation("org.springframework.boot:spring-boot-webmvc-test")
+    // Real PostgreSQL 14 started in-process: no Docker daemon required.
+    testImplementation("io.zonky.test:embedded-postgres:2.2.2") {
+        exclude(group = "org.flywaydb", module = "flyway-core")
+        exclude(group = "org.liquibase", module = "liquibase-core")
+    }
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+// Spring Boot 4.x supports Java 17..26 only; the project targets Java 21 LTS.
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
 }
 
 tasks.test {
     useJUnitPlatform()
+    // The JDBC driver localizes its own messages with the locale of the JVM, so a Russian host
+    // would produce a Russian "Position: 15" inside an otherwise English server message.
+    systemProperty("user.language", "en")
+    systemProperty("user.country", "US")
+    // The PostgreSQL utilities (pg_ctl, initdb) translate their output with gettext, which reads
+    // the locale from the environment. "C" keeps their output in English as well.
+    environment("LC_ALL", "C")
+    environment("LANG", "C")
+    testLogging {
+        events("passed", "skipped", "failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+}
+
+tasks.bootRun {
+    // Same reason as in the test task: keep the messages of the JDBC driver in English.
+    jvmArgs("-Duser.language=en", "-Duser.country=US")
+    systemProperty("user.language", "en")
+    systemProperty("user.country", "US")
+    environment("LC_ALL", "C")
+    environment("LANG", "C")
+}
+
+/**
+ * Starts a real PostgreSQL server on port 5432 without Docker, so that the application can be
+ * started locally: `./gradlew runPostgres` in one terminal, `./gradlew bootRun` in another.
+ *
+ * <p>The launcher owns exactly one data directory (`build/postgres-data` by default). If the port
+ * already serves a PostgreSQL instance whose data directory is that one, the running server is
+ * reused; if it serves a foreign instance, the launcher fails with an explicit message instead of
+ * touching that server.
+ */
+tasks.register<JavaExec>("runPostgres") {
+    group = "application"
+    description = "Runs a local PostgreSQL server (no Docker required)."
+    mainClass = "org.example.tools.PostgresLauncher"
+    classpath = sourceSets["test"].runtimeClasspath
+    systemProperty("user.language", "en")
+    systemProperty("user.country", "US")
+    environment("LC_ALL", "C")
+    environment("LANG", "C")
+    // The port and the data directory are configurable. Gradle project properties ("-P") and
+    // system properties ("-D") are both accepted; the environment variables POSTGRES_PORT and
+    // POSTGRES_DATA_DIR are inherited by the forked JVM anyway.
+    listOf("postgres.port", "postgres.dataDir").forEach { name ->
+        val value = providers.gradleProperty(name)
+            .orElse(providers.systemProperty(name))
+            .orNull
+        if (!value.isNullOrBlank()) {
+            systemProperty(name, value)
+        }
+    }
 }

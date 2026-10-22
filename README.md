@@ -73,8 +73,7 @@ cp src/main/resources/db-local.example.properties src/main/resources/db-local.pr
 
 On Windows: `copy src\main\resources\db-local.example.properties src\main\resources\db-local.properties`
 
-The copied file already holds the standard local defaults, so it needs no further editing. See
-[The database configuration](#the-database-configuration) for every property and for the
+See [The database configuration](#the-database-configuration) for every property and for the
 environment variables that override them.
 
 ## Backend

@@ -29,18 +29,15 @@ import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
  */
 public final class PostgresLauncher {
 
-    /** Database and role expected by the default {@code application.yml}. */
-    private static final String APP_DATABASE = "appdb";
-    private static final String APP_USER = "app";
-    private static final String APP_PASSWORD = "app";
-
-    /** Superuser of the embedded server ({@code initdb -A trust -U postgres}). */
+    /**
+     * The superuser of the embedded server ({@code initdb -A trust -U postgres}). It is a property
+     * of the embedded server itself, not a credential of the application database, so it does not
+     * belong to {@code db-local.properties}.
+     */
     private static final String SUPERUSER = "postgres";
 
     /** Port of the embedded server. Overridable for parallel setups. */
     private static final String PORT_PROPERTY = "postgres.port";
-    private static final String PORT_ENV = "POSTGRES_PORT";
-    private static final int DEFAULT_PORT = 5432;
 
     /** Data directory owned by this launcher. Overridable. */
     private static final String DATA_DIR_PROPERTY = "postgres.dataDir";
@@ -52,7 +49,17 @@ public final class PostgresLauncher {
 
 
     public static void main(String[] args) throws Exception {
-        int port = resolvePort();
+        // The database of the application is not declared here: the launcher reads it from the same
+        // file as the application (classpath:db-local.properties), so the two cannot drift apart.
+        LocalDatabaseConfig config = LocalDatabaseConfig.load();
+
+        if (!config.isLocalHost()) {
+            throw new IllegalStateException("The local launcher can only start a server on this "
+                    + "machine, but the configuration points to '" + config.host() + "'. Either start "
+                    + "the database there yourself, or set POSTGRES_HOST=localhost.");
+        }
+
+        int port = resolvePort(config.port());
         Path dataDir = resolveDataDir();
         Files.createDirectories(dataDir);
 
@@ -81,10 +88,10 @@ public final class PostgresLauncher {
                 startOwnServer(port, dataDir, jdbcUrl);
             }
 
-            ensureAppDatabase(jdbcUrl);
+            ensureAppDatabase(jdbcUrl, config);
         }
 
-        System.out.println("POSTGRES_JDBC_URL=" + jdbcUrl + "/" + APP_DATABASE);
+        System.out.println("POSTGRES_JDBC_URL=jdbc:postgresql://localhost:" + port + "/" + config.database());
         System.out.println("POSTGRES_READY");
         System.out.flush();
 
@@ -140,14 +147,16 @@ public final class PostgresLauncher {
         return "Port " + port + " is already used by another PostgreSQL server"
                 + " (data directory: " + ownerDataDir + ")."
                 + " Stop that server, or start this launcher on a different port"
-                + " (system property '" + PORT_PROPERTY + "' or environment variable '" + PORT_ENV + "').";
+                + " (system property '" + PORT_PROPERTY + "' or environment variable '"
+                + LocalDatabaseConfig.PORT_ENV + "').";
     }
 
     private static String unreachableServerMessage(int port) {
         return "Port " + port + " is already used by a server that does not accept the '"
                 + SUPERUSER + "' connection, so it cannot be checked whether it belongs to this launcher."
                 + " Stop that server, or start this launcher on a different port"
-                + " (system property '" + PORT_PROPERTY + "' or environment variable '" + PORT_ENV + "').";
+                + " (system property '" + PORT_PROPERTY + "' or environment variable '"
+                + LocalDatabaseConfig.PORT_ENV + "').";
     }
 
     private static String reuseMessage(int port, String ownerDataDir) {
@@ -170,22 +179,24 @@ public final class PostgresLauncher {
 
 
     /**
-     * Creates the {@code app} role and the {@code appdb} database that {@code application.yml}
-     * points to, so that the service starts without any manual SQL. Both steps are idempotent: the
-     * server may already contain them from an earlier run.
+     * Creates the role and the database that the application points to, so that the service starts
+     * without any manual SQL. Both steps are idempotent: the server may already contain them from
+     * an earlier run.
      */
-    private static void ensureAppDatabase(String jdbcUrl) throws SQLException {
+    private static void ensureAppDatabase(String jdbcUrl, LocalDatabaseConfig config) throws SQLException {
         try (Connection connection = DriverManager.getConnection(jdbcUrl + "/" + SUPERUSER, SUPERUSER, "");
              Statement statement = connection.createStatement()) {
 
-            if (roleExists(statement, APP_USER)) {
-                statement.execute("ALTER ROLE " + APP_USER + " WITH LOGIN PASSWORD '" + APP_PASSWORD + "' CREATEDB");
+            if (roleExists(statement, config.username())) {
+                statement.execute("ALTER ROLE " + config.username()
+                        + " WITH LOGIN PASSWORD '" + config.password() + "' CREATEDB");
             } else {
-                statement.execute("CREATE ROLE " + APP_USER + " WITH LOGIN PASSWORD '" + APP_PASSWORD + "' CREATEDB");
+                statement.execute("CREATE ROLE " + config.username()
+                        + " WITH LOGIN PASSWORD '" + config.password() + "' CREATEDB");
             }
 
-            if (!databaseExists(statement, APP_DATABASE)) {
-                statement.execute("CREATE DATABASE " + APP_DATABASE + " OWNER " + APP_USER);
+            if (!databaseExists(statement, config.database())) {
+                statement.execute("CREATE DATABASE " + config.database() + " OWNER " + config.username());
             }
         }
     }
@@ -228,13 +239,15 @@ public final class PostgresLauncher {
         }
     }
 
-    private static int resolvePort() {
+    /**
+     * The port of the embedded server. The system property of the launcher wins over the port of
+     * the database configuration, which in turn already honours the environment variable
+     * POSTGRES_PORT.
+     */
+    private static int resolvePort(int defaultPort) {
         String value = System.getProperty(PORT_PROPERTY);
         if (value == null || value.isBlank()) {
-            value = System.getenv(PORT_ENV);
-        }
-        if (value == null || value.isBlank()) {
-            return DEFAULT_PORT;
+            return defaultPort;
         }
         try {
             return Integer.parseInt(value.trim());

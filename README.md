@@ -63,6 +63,20 @@ should not depend on the database.
 Flyway is intentionally **not** part of the health check: the probe runs before/independently of
 the migrations and does not touch any table.
 
+## Getting started
+
+The database configuration is not tracked by Git. Create it once after the clone:
+
+```bash
+cp src/main/resources/db-local.example.properties src/main/resources/db-local.properties
+```
+
+On Windows: `copy src\main\resources\db-local.example.properties src\main\resources\db-local.properties`
+
+The copied file already holds the standard local defaults, so it needs no further editing. See
+[The database configuration](#the-database-configuration) for every property and for the
+environment variables that override them.
+
 ## Backend
 
 ```bash
@@ -106,6 +120,64 @@ In watch mode Karma serves a UI at <http://localhost:9876/> — open it, tick th
 want to see, and use the "Debug" button to inspect the DOM of a failing expectation.
 
 To run a single spec, narrow the pattern, e.g. `ng test --watch --include='**/health-api.service.spec.ts'`.
+
+### The database configuration
+
+The local database is configured in exactly **one** file:
+
+```
+src/main/resources/db-local.properties
+```
+
+**This file is not tracked by Git**, because it may contain the credentials of the developer's own
+database. Create it before the first launch by copying the tracked template:
+
+```bash
+cp src/main/resources/db-local.example.properties src/main/resources/db-local.properties
+```
+
+On Windows:
+
+```bat
+copy src\main\resources\db-local.example.properties src\main\resources\db-local.properties
+```
+
+The template already contains the defaults below, so nothing has to be changed for a local setup.
+If the working copy is missing, the template is used as a fallback, so the application, the launcher
+and Docker Compose all still work on a fresh clone.
+
+| Property           | Default                                          | Meaning                    |
+|--------------------|--------------------------------------------------|----------------------------|
+| `POSTGRES_HOST`    | `localhost`                                      | Host of the database       |
+| `POSTGRES_PORT`    | `5432`                                           | Port of the database       |
+| `POSTGRES_DB`      | `appdb`                                          | Name of the database       |
+| `POSTGRES_USER`    | `app`                                            | Role of the application    |
+| `POSTGRES_PASSWORD`| `app`                                            | Password of the role       |
+
+All three consumers read that file, so they cannot drift apart:
+
+* the **application** imports it (`spring.config.import` in `application.yml`);
+* the **local launcher** (`./gradlew runPostgres`) reads it from the classpath and creates the
+  role and the database it names;
+* **Docker Compose** passes it to the container with `env_file` — the property names are the ones
+  of the official `postgres` image, so the same file works for all three.
+
+The environment variables `DB_URL`, `DB_USERNAME` and `DB_PASSWORD` override the values of that
+file, which is how a different database is pointed at without touching any file:
+
+```bash
+set DB_URL=jdbc:postgresql://localhost:5432/postgres
+set DB_USERNAME=postgres
+set DB_PASSWORD=postgres
+./gradlew bootRun
+```
+
+`POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD` may also
+be set as environment variables; they override the values of the file for all three consumers.
+
+The values in that file are **local development defaults**, not secrets: they belong to a
+PostgreSQL that runs on the developer's own machine. Anything that is meant to be secret must be
+supplied through the environment and never written into that file.
 
 ### The frontend itself
 
@@ -153,9 +225,11 @@ The foreign server is detected with `SHOW data_directory`, i.e. from the server 
 answers the connection — not from a successful JDBC connect, which would also succeed against
 somebody else's server.
 
-The data directory is **not** wiped between runs (`setCleanDataDirectory(false)`), so the `app`
-role and the `appdb` database survive a restart. Both are created idempotently as the `postgres`
-superuser, and only after the ownership of the server has been established.
+The data directory is **not** wiped between runs (`setCleanDataDirectory(false)`), so that the role
+and the database survive a restart. Both are created idempotently as the `postgres` superuser, and
+only after the ownership of the server has been established. Their names come from
+`src/main/resources/db-local.properties`, so that the launcher and the application always point at
+the same database.
 
 Two launchers started at the same time are serialised by a lock file next to the data directory
 (`build/postgres-data.lock`), so that they cannot run `initdb` on the same directory at once. The
@@ -167,6 +241,9 @@ Both the port and the data directory can be changed:
 |-----------------|----------------------|----------------------|
 | Port            | `-Dpostgres.port`    | `POSTGRES_PORT`      |
 | Data directory  | `-Dpostgres.dataDir` | `POSTGRES_DATA_DIR`  |
+
+`POSTGRES_PORT` overrides the port of `src/main/resources/db-local.properties` as well, so the
+server the launcher starts and the URL of the application stay in sync.
 
 ```bash
 ./gradlew runPostgres -Dpostgres.port=55432 -Dpostgres.dataDir=build/pg-55432
@@ -192,18 +269,11 @@ stopped. The body never contains the JDBC URL, the exception type or a stack tra
 * In PowerShell, `npm` resolves to `npm.ps1`, which the default execution policy blocks. Use
   `npm.cmd` instead (`npm.cmd test`), or run the commands in `cmd.exe`.
 * `gradlew` is `gradlew.bat` on Windows.
-* `./gradlew runPostgres` starts PostgreSQL with the default user `postgres` and the database
-  `postgres`. To point the backend at it, override the defaults of `application.yml`:
+* The local launcher creates the role and the database named in
+  `src/main/resources/db-local.properties` (`app`/`appdb` by default) as the `postgres` superuser,
+  so `./gradlew bootRun` works against it without any further configuration. To point the backend at
+  a different database, set `DB_URL`, `DB_USERNAME` and `DB_PASSWORD` — see
+  [The database configuration](#the-database-configuration).
 
-  ```bash
-  set DB_URL=jdbc:postgresql://localhost:5432/postgres
-  set DB_USERNAME=postgres
-  set DB_PASSWORD=postgres
-  ./gradlew bootRun
-  ```
-
-  With Docker available, `docker compose up -d` instead provides the `appdb`/`app`/`app` database
-  that `application.yml` expects by default.
-
-  The launcher itself already creates the `appdb`/`app`/`app` database that `application.yml` expects
-  by default, so `./gradlew bootRun` works against it without any further configuration.
+  With Docker available, `docker compose up -d` instead provides the same database, configured
+  from the very same file.

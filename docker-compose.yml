@@ -9,10 +9,12 @@ services:
     #
     # The working copy is ignored by Git and may be missing on a fresh clone; the tracked example
     # is then used, so that "docker compose up" works either way. Both entries are optional.
+    # When a variable is defined in several files, the last file wins: the example comes first,
+    # so that the working copy overrides it (the same order as in application.yml).
     env_file:
-      - path: src/main/resources/db-local.properties
-        required: false
       - path: src/main/resources/db-local.example.properties
+        required: false
+      - path: src/main/resources/db-local.properties
         required: false
     command: ["postgres", "-c", "lc_messages=C"]
     ports:

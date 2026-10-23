@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    # The credentials of the local database live in one file only:
+    # src/main/resources/db-local.properties. The same file is imported by the application
+    # (see application.yml) and read by the local launcher
+    # (see src/test/java/org/example/tools/LocalDatabaseConfig.java), so that the three of them
+    # cannot drift apart.
+    #
+    # The working copy is ignored by Git and may be missing on a fresh clone; the tracked example
+    # is then used, so that "docker compose up" works either way. Both entries are optional.
+    # When a variable is defined in several files, the last file wins: the example comes first,
+    # so that the working copy overrides it (the same order as in application.yml).
+    env_file:
+      - path: src/main/resources/db-local.example.properties
+        required: false
+      - path: src/main/resources/db-local.properties
+        required: false
+    command: ["postgres", "-c", "lc_messages=C"]
+    ports:
+      - "5432:5432"
+    healthcheck:
+      # "$$" escapes the variable, so that it is expanded by the shell inside the container (where
+      # env_file has put it) and not by Docker Compose itself.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

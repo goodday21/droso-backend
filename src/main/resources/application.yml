@@ -1,0 +1,71 @@
+spring:
+  application:
+    name: project-with-cline
+
+  # The local defaults of the database live in one file, so that the application, the local
+  # launcher and Docker Compose cannot drift apart. The environment variables DB_URL, DB_USERNAME
+  # and DB_PASSWORD still win over the values of that file.
+  #
+  # "db-local.properties" is the working copy of the developer and is ignored by Git; it is
+  # created by copying "db-local.example.properties". The example is imported first, so that the
+  # working copy wins: the application still starts with the standard defaults when the working
+  # copy is missing. "optional:" keeps the application starting when there is neither.
+  config:
+    import:
+      - classpath:db-local.example.properties
+      - optional:classpath:db-local.properties
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}}
+    username: ${DB_USERNAME:${POSTGRES_USER}}
+    password: ${DB_PASSWORD:${POSTGRES_PASSWORD}}
+    hikari:
+      # Bound how long the health check may wait for a connection from the pool.
+      connection-timeout: 2000
+      validation-timeout: 2000
+      maximum-pool-size: 10
+      minimum-idle: 1
+      # NOTE: the server messages are localized by the "lc_messages" GUC. It must not be set per
+      # session here: in PostgreSQL it is a superuser-only parameter, so the option would make
+      # the connection of an ordinary role fail with "permission denied to set parameter".
+      # The server is therefore started with "lc_messages=C" instead:
+      #   - embedded server: see PostgresLauncher
+      #   - Docker: see docker-compose.yml
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+# Parameters of the health probe.
+health:
+  timeout-seconds: 2
+  query: SELECT 1
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Actuator is used for metrics/logging only; the public health contract is /api/v1/health.
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never
+  health:
+    db:
+      enabled: false
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+
+logging:
+  charset:
+    # The console of a Windows terminal is not UTF-8 by default, which turns any non-ASCII
+    # character of a log record into mojibake.
+    console: UTF-8
+    file: UTF-8
+  level:
+    org.example: INFO

@@ -5,6 +5,12 @@ build/
 !**/src/test/**/build/
 .kotlin
 
+### Local database configuration ###
+# The working copy of the local database configuration is not tracked: it may contain the
+# credentials of the developer's own database. Copy "db-local.example.properties" to
+# "db-local.properties" and adjust it. The example file stays in Git and provides the defaults.
+src/main/resources/db-local.properties
+
 ### IntelliJ IDEA ###
 .idea/modules.xml
 .idea/jarRepositories.xml
@@ -41,3 +47,9 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+### Angular ###
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+frontend/out-tsc/

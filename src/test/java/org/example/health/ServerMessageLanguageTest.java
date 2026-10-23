@@ -81,8 +81,10 @@ class ServerMessageLanguageTest {
     @Test
     @DisplayName("an authentication error is English as well")
     void authenticationErrorIsEnglish() {
-        try (Connection connection = DriverManager.getConnection(
-                postgres.getJdbcUrl("postgres", "postgres"), "role_that_does_not_exist", "")) {
+        // Not getJdbcUrl(): its URL carries "?user=postgres", which the driver prefers over the
+        // user passed here, so the connection would succeed as "postgres".
+        String url = "jdbc:postgresql://localhost:" + postgres.getPort() + "/postgres";
+        try (Connection connection = DriverManager.getConnection(url, "role_that_does_not_exist", "")) {
             fail("the connection was expected to fail");
         } catch (SQLException e) {
             assertThat(e.getMessage())

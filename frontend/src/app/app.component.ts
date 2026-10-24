@@ -1,14 +1,13 @@
 import { Component } from '@angular/core';
-import { HealthPanelComponent } from './health/health-panel.component';
+import { RouterOutlet } from '@angular/router';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [HealthPanelComponent],
+  imports: [RouterOutlet],
   template: `
     <main class="page">
-      <h1>Service health</h1>
-      <app-health-panel />
+      <router-outlet />
     </main>
   `,
   styles: [

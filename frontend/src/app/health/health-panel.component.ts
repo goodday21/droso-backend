@@ -24,7 +24,7 @@ import { HealthCheckOutcome } from './health.model';
             <dl>
               <dt>Database</dt>
               <dd>{{ result.body.database.status }}</dd>
-              <dt>Latency</dt>
+              <dt>Latency (ms)</dt>
               <dd>{{ result.body.database.latencyMs }} ms</dd>
               <dt>Checked at</dt>
               <dd>{{ result.body.timestamp }}</dd>

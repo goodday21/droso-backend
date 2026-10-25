@@ -79,9 +79,16 @@ environment variables that override them.
 ## Backend
 
 ```bash
-./gradlew bootRun          # start the service
-./gradlew test             # run all tests
+./gradlew bootRunWithPostgres   # start a local PostgreSQL, then the service (one command)
+./gradlew bootRun               # start the service only, against a database that already runs
+./gradlew runPostgres           # start a local PostgreSQL only (no Docker needed)
+./gradlew test                  # run all tests
 ```
+
+`bootRunWithPostgres` starts (or reuses) the same server as `runPostgres` and, once it is ready,
+starts the service exactly as `bootRun` does. `Ctrl+C` stops the service only: PostgreSQL keeps
+running in the background and is reused by the next launch. To stop it as well, see
+[`runPostgres` and repeated launches](#runpostgres-and-repeated-launches).
 
 The tests do not require Docker: a real PostgreSQL 14 server is started in-process by
 `io.zonky.test:embedded-postgres`. `HealthEndpointIntegrationTest` and
@@ -180,18 +187,17 @@ supplied through the environment and never written into that file.
 
 ### The frontend itself
 
-Three terminals:
+Two terminals:
 
 ```bash
-# 1) a real PostgreSQL on :5432 (no Docker needed)
-./gradlew runPostgres
+# 1) a real PostgreSQL on :5432 (no Docker needed) and the backend on :8080
+./gradlew bootRunWithPostgres
 
-# 2) the backend on :8080
-./gradlew bootRun
-
-# 3) the dev server on :4200
+# 2) the dev server on :4200
 cd frontend && npm start
 ```
+
+`./gradlew runPostgres` and `./gradlew bootRun` in two separate terminals do the same as step 1.
 
 Open <http://localhost:4200/>. The panel shows a green **UP** badge with the database latency.
 
@@ -202,10 +208,11 @@ Now break the database and press **Refresh** in the panel:
 taskkill /IM postgres.exe /F
 ```
 
-Restart it with `./gradlew runPostgres` and press **Refresh** again — the panel must return to green.
+Restart it with `./gradlew runPostgres` in another terminal and press **Refresh** again — the panel
+must return to green.
 This proves the UI reacts to a genuinely broken database rather than to a static mock.
 
-To see the third state, stop the backend (`Ctrl+C` in terminal 2) and press **Refresh**: the panel
+To see the third state, stop the backend (`Ctrl+C` in terminal 1) and press **Refresh**: the panel
 shows *not reachable* instead of *DOWN*, because the service itself no longer answers.
 
 ### `runPostgres` and repeated launches
@@ -248,7 +255,20 @@ server the launcher starts and the URL of the application stay in sync.
 ./gradlew runPostgres -Dpostgres.port=55432 -Dpostgres.dataDir=build/pg-55432
 ```
 
-To start completely from scratch, delete the data directory:
+`./gradlew bootRunWithPostgres` goes through exactly the same steps, with the same properties: it
+runs the launcher with `-Dpostgres.detach=true`, which returns as soon as the server is ready and
+leaves it running, and then starts the service.
+
+The server is a separate `postgres` process, so it keeps running after the launcher (or the
+service) has been stopped with `Ctrl+C`; the next launch reuses it. To stop it (note that these
+commands stop **every** PostgreSQL server of the machine, not only this one):
+
+```bash
+taskkill /IM postgres.exe /F    # Windows
+pkill -x postgres               # Linux / macOS
+```
+
+To start completely from scratch, stop the server and delete the data directory:
 
 ```bash
 rm -rf build/postgres-data

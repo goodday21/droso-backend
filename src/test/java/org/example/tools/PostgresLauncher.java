@@ -44,6 +44,12 @@ public final class PostgresLauncher {
     private static final String DATA_DIR_ENV = "POSTGRES_DATA_DIR";
     private static final String DEFAULT_DATA_DIR = "build/postgres-data";
 
+    /**
+     * Detached mode: return as soon as the server is ready and leave it running, instead of
+     * blocking. Used by {@code ./gradlew bootRunWithPostgres}, which starts the application next.
+     */
+    private static final String DETACH_PROPERTY = "postgres.detach";
+
     private PostgresLauncher() {
     }
 
@@ -62,6 +68,7 @@ public final class PostgresLauncher {
         int port = resolvePort(config.port());
         Path dataDir = resolveDataDir();
         Files.createDirectories(dataDir);
+        boolean detach = Boolean.getBoolean(DETACH_PROPERTY);
 
         String jdbcUrl = "jdbc:postgresql://localhost:" + port;
 
@@ -85,7 +92,7 @@ public final class PostgresLauncher {
                     // its data directory cannot be read. It is still a foreign server.
                     throw new IllegalStateException(unreachableServerMessage(port));
                 }
-                startOwnServer(port, dataDir, jdbcUrl);
+                startOwnServer(port, dataDir, jdbcUrl, detach);
             }
 
             ensureAppDatabase(jdbcUrl, config);
@@ -95,6 +102,12 @@ public final class PostgresLauncher {
         System.out.println("POSTGRES_READY");
         System.out.flush();
 
+        if (detach) {
+            // The server runs in its own process and keeps running; the shutdown hook that would
+            // stop it is not registered in this mode. System.exit, because the threads of the
+            // embedded server may keep the JVM alive otherwise.
+            System.exit(0);
+        }
         Thread.currentThread().join();
     }
 
@@ -102,7 +115,8 @@ public final class PostgresLauncher {
      * Starts the embedded server on the given port and data directory. The data directory is kept
      * on shutdown, so that the role and the database survive a restart of the launcher.
      */
-    private static void startOwnServer(int port, Path dataDir, String jdbcUrl) throws Exception {
+    private static void startOwnServer(int port, Path dataDir, String jdbcUrl, boolean detach)
+            throws Exception {
         EmbeddedPostgres postgres;
         try {
             postgres = EmbeddedPostgres.builder()
@@ -110,7 +124,8 @@ public final class PostgresLauncher {
                     .setDataDirectory(dataDir.toFile())
                     // The data directory is reused across runs: it holds the "app" role.
                     .setCleanDataDirectory(false)
-                    .setRegisterShutdownHook(true)
+                    // In the detached mode the server must outlive the launcher.
+                    .setRegisterShutdownHook(!detach)
                     // The server inherits the OS locale on Windows and therefore answers in Russian.
                     // "C" keeps every server-side message in English.
                     .setServerConfig("lc_messages", "C")

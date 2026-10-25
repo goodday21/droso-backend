@@ -98,3 +98,34 @@ tasks.register<JavaExec>("runPostgres") {
         }
     }
 }
+// Hidden helper of bootRunWithPostgres: runPostgres in the detached mode, i.e. it returns as soon as
+// the server is ready (or reused) and leaves it running, so that the build can go on to the
+// application. Its settings are taken from runPostgres, so that the two cannot drift apart.
+val startPostgres = tasks.register<JavaExec>("startPostgres") {
+    description = "Starts the local PostgreSQL server and returns once it is ready."
+    val runPostgres = tasks.named<JavaExec>("runPostgres").get()
+    mainClass = runPostgres.mainClass
+    classpath = runPostgres.classpath
+    systemProperties(runPostgres.systemProperties)
+    environment(runPostgres.environment)
+    systemProperty("postgres.detach", "true")
+}
+
+/**
+ * Starts the local PostgreSQL server and then the application with one command:
+ * `./gradlew bootRunWithPostgres`. The application is configured exactly as by bootRun.
+ *
+ * <p>The server keeps running after the application has been stopped, and the next launch reuses
+ * it, just like after `./gradlew runPostgres`.
+ */
+tasks.register<org.springframework.boot.gradle.tasks.run.BootRun>("bootRunWithPostgres") {
+    group = "application"
+    description = "Runs the local PostgreSQL server and then the application."
+    dependsOn(startPostgres)
+    val bootRun = tasks.bootRun.get()
+    mainClass = bootRun.mainClass
+    classpath = bootRun.classpath
+    jvmArgs(bootRun.jvmArgs)
+    systemProperties(bootRun.systemProperties)
+    environment(bootRun.environment)
+}

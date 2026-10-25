@@ -3,6 +3,7 @@ package org.example.tools;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -49,14 +50,21 @@ public record LocalDatabaseConfig(String jdbcUrl, String username, String passwo
      * Reads the configuration from the classpath and applies the environment overrides.
      */
     public static LocalDatabaseConfig load() {
-        Properties properties = readProperties();
+        return from(readProperties(), System.getenv());
+    }
 
+    /**
+     * Builds the configuration from the given properties (the keys of {@code db-local.properties})
+     * and environment. {@link #load()} passes the classpath file and the real environment; tests
+     * pass fixed values, so that they do not depend on the machine they run on.
+     */
+    static LocalDatabaseConfig from(Properties properties, Map<String, String> environment) {
         // The environment variables DB_URL, DB_USERNAME and DB_PASSWORD override the values of the
         // file, exactly as they do in the application. The port of the launcher is overridden with
         // POSTGRES_PORT, so that the server it starts and the URL of the application agree.
-        String jdbcUrl = override(composeUrl(properties), URL_ENV);
-        String username = override(properties.getProperty("POSTGRES_USER"), USERNAME_ENV);
-        String password = override(properties.getProperty("POSTGRES_PASSWORD"), PASSWORD_ENV);
+        String jdbcUrl = override(composeUrl(properties, environment), URL_ENV, environment);
+        String username = override(properties.getProperty("POSTGRES_USER"), USERNAME_ENV, environment);
+        String password = override(properties.getProperty("POSTGRES_PASSWORD"), PASSWORD_ENV, environment);
 
         if (jdbcUrl == null || jdbcUrl.isBlank()) {
             throw new IllegalStateException("The property 'POSTGRES_HOST' is missing in " + RESOURCE);
@@ -70,9 +78,9 @@ public record LocalDatabaseConfig(String jdbcUrl, String username, String passwo
     /**
      * Composes the JDBC URL from the parts of the file, exactly as the application does.
      */
-    private static String composeUrl(Properties properties) {
+    private static String composeUrl(Properties properties, Map<String, String> environment) {
         String host = properties.getProperty("POSTGRES_HOST");
-        String port = override(properties.getProperty("POSTGRES_PORT"), PORT_ENV);
+        String port = override(properties.getProperty("POSTGRES_PORT"), PORT_ENV, environment);
         String database = properties.getProperty("POSTGRES_DB");
         if (host == null || host.isBlank() || port == null || port.isBlank()
                 || database == null || database.isBlank()) {
@@ -92,7 +100,7 @@ public record LocalDatabaseConfig(String jdbcUrl, String username, String passwo
 
     /**
      * The host of the database, e.g. {@code localhost} for
-     * {@code jdbc:postgresql://localhost:5432/appdb}.
+     * {@code jdbc:postgresql://localhost:5432/mydb}.
      */
     public String host() {
         String authority = authority();
@@ -117,8 +125,8 @@ public record LocalDatabaseConfig(String jdbcUrl, String username, String passwo
     }
 
     /**
-     * The name of the database, e.g. {@code appdb} for
-     * {@code jdbc:postgresql://localhost:5432/appdb}.
+     * The name of the database, e.g. {@code mydb} for
+     * {@code jdbc:postgresql://localhost:5432/mydb}.
      */
     public String database() {
         String path = path();
@@ -165,8 +173,9 @@ public record LocalDatabaseConfig(String jdbcUrl, String username, String passwo
      * Returns the value of the environment variable if it is set, otherwise the value of the
      * property.
      */
-    private static String override(String propertyValue, String environmentVariable) {
-        String fromEnvironment = System.getenv(environmentVariable);
+    private static String override(String propertyValue, String environmentVariable,
+                                   Map<String, String> environment) {
+        String fromEnvironment = environment.get(environmentVariable);
         if (fromEnvironment != null && !fromEnvironment.isBlank()) {
             return fromEnvironment;
         }

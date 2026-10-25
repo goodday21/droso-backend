@@ -170,7 +170,7 @@ class DatabaseHealthIndicatorTest {
 
         @ParameterizedTest
         @ValueSource(strings = {
-                "jdbc:postgresql://10.0.0.5:5432/appdb",
+                "jdbc:postgresql://10.0.0.5:5432/test_db",
                 "org.postgresql.util.PSQLException",
                 "Connection to 10.0.0.5:5432 refused. Check that the hostname and port are correct"
         })

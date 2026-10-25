@@ -61,8 +61,8 @@ This section is the source of truth of the contract: the frontend model
 |-----------------------------|----------------------|--------------------------------------|
 | `health.timeout-seconds`    | `2`                  | Query timeout of the probe statement |
 | `health.query`              | `SELECT 1`           | The probe statement                  |
-| `DB_URL`                    | `jdbc:postgresql://localhost:5432/appdb` | JDBC URL   |
-| `DB_USERNAME` / `DB_PASSWORD` | `app` / `app`      | Credentials                          |
+| `DB_URL`                    | composed from `db-local.properties` | JDBC URL              |
+| `DB_USERNAME` / `DB_PASSWORD` | from `db-local.properties` | Credentials                      |
 | `SERVER_PORT`               | `8080`               | HTTP port                            |
 
 Flyway is intentionally **not** part of the health check: the probe runs before/independently of
@@ -123,17 +123,21 @@ On Windows:
 copy src\main\resources\db-local.example.properties src\main\resources\db-local.properties
 ```
 
-The template already contains the defaults below, so nothing has to be changed for a local setup.
-If the working copy is missing, the template is used as a fallback, so the application, the launcher
-and Docker Compose all still work on a fresh clone.
+The template contains only placeholders (`stub`) for the database, the role and the password: put
+your own values into the working copy. If the working copy is missing, the template is used as a
+fallback, so the application, the launcher and Docker Compose still work on a fresh clone (with a
+database, role and password named `stub`).
 
-| Property           | Default                                          | Meaning                    |
+| Property           | Template value                                   | Meaning                    |
 |--------------------|--------------------------------------------------|----------------------------|
 | `POSTGRES_HOST`    | `localhost`                                      | Host of the database       |
 | `POSTGRES_PORT`    | `5432`                                           | Port of the database       |
-| `POSTGRES_DB`      | `appdb`                                          | Name of the database       |
-| `POSTGRES_USER`    | `app`                                            | Role of the application    |
-| `POSTGRES_PASSWORD`| `app`                                            | Password of the role       |
+| `POSTGRES_DB`      | `stub` (placeholder)                             | Name of the database       |
+| `POSTGRES_USER`    | `stub` (placeholder)                             | Role of the application    |
+| `POSTGRES_PASSWORD`| `stub` (placeholder)                             | Password of the role       |
+
+Your own values belong in the working copy only: it is ignored by Git, and nothing else in the
+repository (code, tests, documentation) should repeat them.
 
 All three consumers read that file, so they cannot drift apart:
 
@@ -235,7 +239,7 @@ To check the endpoint through the UI, including the *DOWN* and *not reachable* s
 
 * `gradlew` is `gradlew.bat` on Windows.
 * The local launcher creates the role and the database named in
-  `src/main/resources/db-local.properties` (`app`/`appdb` by default) as the `postgres` superuser,
+  `src/main/resources/db-local.properties` as the `postgres` superuser,
   so `./gradlew bootRun` works against it without any further configuration. To point the backend at
   a different database, set `DB_URL`, `DB_USERNAME` and `DB_PASSWORD` — see
   [The database configuration](#the-database-configuration).

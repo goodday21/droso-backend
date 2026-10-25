@@ -1,32 +1,32 @@
 # droso-backend
 
-A Spring Boot service with a readiness endpoint that verifies the real availability of PostgreSQL,
-and an Angular page that shows its status.
+A Spring Boot service with a readiness endpoint that verifies the real availability of PostgreSQL.
+The code, its build and its documentation live in [`backend/`](backend/README.md).
 
-| Directory                         | Contents                                                  |
-|-----------------------------------|-----------------------------------------------------------|
-| [`backend/`](backend/README.md)   | Spring Boot service, Gradle build, local PostgreSQL tools |
-| [`frontend/`](frontend/README.md) | Angular application                                       |
-
-Each directory is self-contained: it has its own build, README and `.gitignore`, and its commands
-are run from inside it.
+The Angular page that shows the status lives in its own repository,
+[droso-frontend](https://github.com/goodday21/droso-frontend).
 
 ## Quick start
 
 ```bash
-# PostgreSQL and the backend on :8080
 cd backend
 cp src/main/resources/db-local.example.properties src/main/resources/db-local.properties   # once
 ./gradlew bootRunWithPostgres
-
-# the frontend on :4200, in a second terminal
-cd frontend
-npm install                                                                                # once
-npm start
 ```
 
-Open <http://localhost:4200/>. See [`backend/README.md`](backend/README.md) and
-[`frontend/README.md`](frontend/README.md) for everything else.
+The service answers on <http://localhost:8080/api/v1/health>. See
+[`backend/README.md`](backend/README.md) for everything else.
+
+## Local development with the frontend
+
+Clone both repositories next to each other, then follow the
+[walkthrough of droso-frontend](https://github.com/goodday21/droso-frontend#manual-walkthrough):
+
+```
+IdeaProjects/
+├── droso-backend/
+└── droso-frontend/
+```
 
 ## IntelliJ IDEA
 

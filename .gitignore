@@ -1,15 +1,9 @@
-.gradle
-build/
-!gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
-.kotlin
+# The rules of each part live next to it: backend/.gitignore and frontend/.gitignore.
+# This file only holds the rules of the editors and of the OS.
 
-### Local database configuration ###
-# The working copy of the local database configuration is not tracked: it may contain the
-# credentials of the developer's own database. Copy "db-local.example.properties" to
-# "db-local.properties" and adjust it. The example file stays in Git and provides the defaults.
-src/main/resources/db-local.properties
+# Leftovers of the time the backend lived in the repository root.
+/.gradle/
+/build/
 
 ### IntelliJ IDEA ###
 .idea/modules.xml
@@ -47,9 +41,3 @@ bin/
 
 ### Mac OS ###
 .DS_Store
-
-### Angular ###
-frontend/node_modules/
-frontend/dist/
-frontend/.angular/
-frontend/out-tsc/

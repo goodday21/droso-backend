@@ -1,4 +1,4 @@
-# project-with-cline
+# droso-backend
 
 Spring Boot service with a readiness endpoint `GET /api/v1/health` that verifies the **real**
 availability of PostgreSQL and answers HTTP `200` (UP) or HTTP `503` (DOWN).

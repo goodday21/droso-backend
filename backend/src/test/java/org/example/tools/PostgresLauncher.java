@@ -122,7 +122,7 @@ public final class PostgresLauncher {
             postgres = EmbeddedPostgres.builder()
                     .setPort(port)
                     .setDataDirectory(dataDir.toFile())
-                    // The data directory is reused across runs: it holds the "app" role.
+                    // The data directory is reused across runs: it holds the role of the application.
                     .setCleanDataDirectory(false)
                     // In the detached mode the server must outlive the launcher.
                     .setRegisterShutdownHook(!detach)

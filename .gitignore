@@ -1,4 +1,4 @@
-# The rules of each part live next to it: backend/.gitignore and frontend/.gitignore.
+# The rules of the backend live next to it, in backend/.gitignore.
 # This file only holds the rules of the editors and of the OS.
 
 # Leftovers of the time the backend lived in the repository root.

@@ -4,7 +4,7 @@ Spring Boot service with a readiness endpoint `GET /api/v1/health` that verifies
 availability of PostgreSQL and answers HTTP `200` (UP) or HTTP `503` (DOWN).
 
 All commands and paths below are relative to this `backend/` directory. The frontend that shows
-the health status lives in [`../frontend`](../frontend/README.md).
+the health status lives in its own repository, [droso-frontend](https://github.com/goodday21/droso-frontend).
 
 ## Stack
 
@@ -53,7 +53,7 @@ The endpoint is a **readiness** check: it deliberately depends on PostgreSQL. A 
 should not depend on the database.
 
 This section is the source of truth of the contract: the frontend model
-([`health.model.ts`](../frontend/src/app/health/health.model.ts)) follows it.
+([`health.model.ts`](https://github.com/goodday21/droso-frontend/blob/main/src/app/health/health.model.ts)) follows it.
 
 ## Configuration
 
@@ -229,7 +229,7 @@ curl -i http://localhost:8080/api/v1/health
 stopped. The body never contains the JDBC URL, the exception type or a stack trace.
 
 To check the endpoint through the UI, including the *DOWN* and *not reachable* states, see
-[the frontend walkthrough](../frontend/README.md#manual-walkthrough).
+[the walkthrough of droso-frontend](https://github.com/goodday21/droso-frontend#manual-walkthrough).
 
 ### Notes for Windows
 

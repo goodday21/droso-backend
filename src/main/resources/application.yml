@@ -1,6 +1,6 @@
 spring:
   application:
-    name: project-with-cline
+    name: droso-backend
 
   # The local defaults of the database live in one file, so that the application, the local
   # launcher and Docker Compose cannot drift apart. The environment variables DB_URL, DB_USERNAME

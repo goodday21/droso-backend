@@ -18,6 +18,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    // JPA mapping of the domain entities. The schema itself is owned by Flyway.
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 
     // Spring Boot 4 split the auto-configuration of Flyway into a dedicated module.
     implementation("org.springframework.boot:spring-boot-flyway")

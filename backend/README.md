@@ -10,7 +10,7 @@ the health status lives in its own repository, [droso-frontend](https://github.c
 
 | Part      | Technology                                                        |
 |-----------|-------------------------------------------------------------------|
-| Backend   | Spring Boot 4.1.1, Spring MVC, Spring JDBC, Flyway, PostgreSQL 42 |
+| Backend   | Spring Boot 4.1.1, Spring MVC, Spring Data JPA (Hibernate 7), Flyway, PostgreSQL 42 |
 | Toolchain | Java 21 LTS (auto-provisioned by Gradle), Gradle 9.8, Kotlin DSL |
 | Tests     | JUnit 5, Mockito, real PostgreSQL 14 in-process (zonky)           |
 
@@ -64,6 +64,10 @@ This section is the source of truth of the contract: the frontend model
 | `DB_URL`                    | composed from `db-local.properties` | JDBC URL              |
 | `DB_USERNAME` / `DB_PASSWORD` | from `db-local.properties` | Credentials                      |
 | `SERVER_PORT`               | `8080`               | HTTP port                            |
+
+The schema is owned by the Flyway migrations (`src/main/resources/db/migration`). Hibernate never
+changes it (`spring.jpa.hibernate.ddl-auto: validate`): it only checks on start-up that the entities
+match the migrated tables, so a change of an entity needs a new migration.
 
 Flyway is intentionally **not** part of the health check: the probe runs before/independently of
 the migrations and does not touch any table.

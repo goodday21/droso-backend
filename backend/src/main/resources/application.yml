@@ -36,6 +36,14 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+  jpa:
+    # The schema is created and changed by the Flyway migrations only. Hibernate merely verifies
+    # on start-up that the entities match the migrated tables, so that a drift fails fast.
+    hibernate:
+      ddl-auto: validate
+    # Do not keep the persistence context open for the whole HTTP request.
+    open-in-view: false
+
 # Parameters of the health probe.
 health:
   timeout-seconds: 2

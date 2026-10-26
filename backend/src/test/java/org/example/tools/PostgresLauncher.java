@@ -22,7 +22,7 @@ import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
  * <p>Run with:
  * {@code ./gradlew runPostgres}
  *
- * <p>The launcher owns exactly one data directory ({@code build/postgres-data} by default). That
+ * <p>The launcher owns exactly one data directory ({@code .postgres/data} by default). That
  * directory is what identifies the server: if the port already serves a PostgreSQL instance whose
  * data directory is the one of this launcher, that server is reused; if the port serves a foreign
  * instance, the launcher fails with an explicit message instead of silently attaching to it.
@@ -42,7 +42,8 @@ public final class PostgresLauncher {
     /** Data directory owned by this launcher. Overridable. */
     private static final String DATA_DIR_PROPERTY = "postgres.dataDir";
     private static final String DATA_DIR_ENV = "POSTGRES_DATA_DIR";
-    private static final String DEFAULT_DATA_DIR = "build/postgres-data";
+    // Outside of "build/" on purpose: "./gradlew clean" must not wipe the local database.
+    private static final String DEFAULT_DATA_DIR = ".postgres/data";
 
     /**
      * Detached mode: return as soon as the server is ready and leave it running, instead of

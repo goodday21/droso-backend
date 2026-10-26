@@ -10,3 +10,8 @@ build/
 # credentials of the developer's own database. Copy "db-local.example.properties" to
 # "db-local.properties" and adjust it. The example file stays in Git and provides the defaults.
 src/main/resources/db-local.properties
+
+### Local PostgreSQL ###
+# The data directory of "./gradlew runPostgres" and its lock file. They live outside of "build/",
+# so that "./gradlew clean" does not wipe the local database.
+/.postgres/

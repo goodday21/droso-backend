@@ -76,7 +76,8 @@ tasks.bootRun {
  * Starts a real PostgreSQL server on port 5432 without Docker, so that the application can be
  * started locally: `./gradlew runPostgres` in one terminal, `./gradlew bootRun` in another.
  *
- * <p>The launcher owns exactly one data directory (`build/postgres-data` by default). If the port
+ * <p>The launcher owns exactly one data directory (`.postgres/data` by default, outside of
+ * `build/`, so that `./gradlew clean` does not wipe the local database). If the port
  * already serves a PostgreSQL instance whose data directory is that one, the running server is
  * reused; if it serves a foreign instance, the launcher fails with an explicit message instead of
  * touching that server.

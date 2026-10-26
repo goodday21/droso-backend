@@ -202,8 +202,9 @@ supplied through the environment and never written into that file.
 
 ### `runPostgres` and repeated launches
 
-`./gradlew runPostgres` owns exactly one data directory (`build/postgres-data` by default). That
-directory is what identifies the server — the port alone is not enough, because the port may well
+`./gradlew runPostgres` owns exactly one data directory (`.postgres/data` by default, ignored by
+Git). It lives outside of `build/` on purpose, so that `./gradlew clean` does not wipe the local
+database — not even from under a running server. That directory is what identifies the server — the port alone is not enough, because the port may well
 be taken by something else:
 
 | Situation                                                              | Behaviour                                                                             |
@@ -223,7 +224,7 @@ only after the ownership of the server has been established. Their names come fr
 the same database.
 
 Two launchers started at the same time are serialised by a lock file next to the data directory
-(`build/postgres-data.lock`), so that they cannot run `initdb` on the same directory at once. The
+(`.postgres/data.lock`), so that they cannot run `initdb` on the same directory at once. The
 second one then finds the running server of the first one and reuses it.
 
 Both the port and the data directory can be changed:
@@ -237,7 +238,7 @@ Both the port and the data directory can be changed:
 server the launcher starts and the URL of the application stay in sync.
 
 ```bash
-./gradlew runPostgres -Dpostgres.port=55432 -Dpostgres.dataDir=build/pg-55432
+./gradlew runPostgres -Dpostgres.port=55432 -Dpostgres.dataDir=.postgres/pg-55432
 ```
 
 `./gradlew bootRunWithPostgres` goes through exactly the same steps, with the same properties: it
@@ -256,8 +257,13 @@ pkill -x postgres               # Linux / macOS
 To start completely from scratch, stop the server and delete the data directory:
 
 ```bash
-rm -rf build/postgres-data
+rm -rf .postgres/data
 ```
+
+A clone that used the old default, `build/postgres-data`, does not pick it up: the launcher starts
+a new, empty server in `.postgres/data`. Stop the old server first (see above), otherwise the
+launcher finds it on the port and refuses to touch it as a foreign server; then delete
+`build/postgres-data`.
 
 ### The backend endpoint directly
 

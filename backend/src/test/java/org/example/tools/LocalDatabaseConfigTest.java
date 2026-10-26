@@ -29,6 +29,10 @@ class LocalDatabaseConfigTest {
         return properties;
     }
 
+    private static LocalDatabaseConfig withUrl(String jdbcUrl) {
+        return new LocalDatabaseConfig(jdbcUrl, "test_user", "test_password");
+    }
+
     @Test
     @DisplayName("composes the URL and the credentials from the properties")
     void composesFromProperties() {
@@ -86,7 +90,7 @@ class LocalDatabaseConfigTest {
     @Test
     @DisplayName("uses the default port when the URL does not contain one")
     void defaultPort() {
-        LocalDatabaseConfig config = new LocalDatabaseConfig("jdbc:postgresql://localhost/test_db", "test_user", "test_password");
+        LocalDatabaseConfig config = withUrl("jdbc:postgresql://localhost/test_db");
 
         assertThat(config.port()).isEqualTo(5432);
         assertThat(config.database()).isEqualTo("test_db");
@@ -95,8 +99,7 @@ class LocalDatabaseConfigTest {
     @Test
     @DisplayName("ignores the query parameters of the JDBC URL")
     void ignoresQueryParameters() {
-        LocalDatabaseConfig config = new LocalDatabaseConfig(
-                "jdbc:postgresql://db.example.com:6543/test_db?ssl=true", "test_user", "test_password");
+        LocalDatabaseConfig config = withUrl("jdbc:postgresql://db.example.com:6543/test_db?ssl=true");
 
         assertThat(config.host()).isEqualTo("db.example.com");
         assertThat(config.port()).isEqualTo(6543);
@@ -106,7 +109,7 @@ class LocalDatabaseConfigTest {
     @Test
     @DisplayName("rejects a JDBC URL of an unsupported driver")
     void rejectsUnsupportedDriver() {
-        LocalDatabaseConfig config = new LocalDatabaseConfig("jdbc:mysql://localhost:3306/test_db", "test_user", "test_password");
+        LocalDatabaseConfig config = withUrl("jdbc:mysql://localhost:3306/test_db");
 
         assertThat(org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, config::host))
                 .hasMessageContaining("jdbc:mysql");
@@ -116,9 +119,9 @@ class LocalDatabaseConfigTest {
     @DisplayName("recognises the local host, so that the launcher knows what it may start")
     void recognisesLocalHost() {
         assertThat(LocalDatabaseConfig.from(properties(), NO_ENVIRONMENT).isLocalHost()).isTrue();
-        assertThat(new LocalDatabaseConfig("jdbc:postgresql://127.0.0.1:5432/test_db", "test_user", "test_password")
+        assertThat(withUrl("jdbc:postgresql://127.0.0.1:5432/test_db")
                 .isLocalHost()).isTrue();
-        assertThat(new LocalDatabaseConfig("jdbc:postgresql://db.example.com:5432/test_db", "test_user", "test_password")
+        assertThat(withUrl("jdbc:postgresql://db.example.com:5432/test_db")
                 .isLocalHost()).isFalse();
     }
 }

@@ -44,6 +44,13 @@ spring:
     # Do not keep the persistence context open for the whole HTTP request.
     open-in-view: false
 
+  web:
+    # The messages of Bean Validation are part of the error responses. They are interpolated in
+    # the locale of the request, so a Russian browser would get "не должно быть пустым" instead of
+    # "must not be blank". A fixed locale keeps the API answering in English for every client.
+    locale: en
+    locale-resolver: fixed
+
 # Parameters of the health probe.
 health:
   timeout-seconds: 2

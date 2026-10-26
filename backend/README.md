@@ -46,14 +46,46 @@ actually returned a row.
 ```
 
 The body never contains the JDBC URL, host, port, database name, user, exception message or stack
-trace. Such details are written to the server log only. The same protection is provided by
-`ApiExceptionHandler`, which converts any unexpected exception into a generic body.
+trace. Such details are written to the server log only. An unexpected failure of the endpoint
+answers `500` with the [error format](#error-responses) below.
 
 The endpoint is a **readiness** check: it deliberately depends on PostgreSQL. A liveness probe
 should not depend on the database.
 
 This section is the source of truth of the contract: the frontend model
 ([`health.model.ts`](https://github.com/goodday21/droso-frontend/blob/main/src/app/health/health.model.ts)) follows it.
+
+### Error responses
+
+Every error of the API (except the `503` of the health endpoint above) has the same body:
+
+```json
+{
+  "status": 400,
+  "code": "VALIDATION_ERROR",
+  "message": "Request validation failed",
+  "fieldErrors": { "title": "must not be blank" }
+}
+```
+
+| HTTP | `code`                | When                                                                                   |
+|------|-----------------------|----------------------------------------------------------------------------------------|
+| 400  | `VALIDATION_ERROR`    | A Bean Validation constraint of the body or of a parameter is violated, a parameter is missing or has the wrong type |
+| 400  | `MALFORMED_REQUEST`   | The body cannot be read: invalid JSON, a value of the wrong type, an unknown enum value, no body |
+| 404  | `RESOURCE_NOT_FOUND`  | `ResourceNotFoundException` is thrown, or the URL is unknown                            |
+| 500  | `INTERNAL_ERROR`      | Any unexpected exception                                                               |
+| other| name of the status    | Other errors of Spring MVC, e.g. `405 METHOD_NOT_ALLOWED`, `415 UNSUPPORTED_MEDIA_TYPE` |
+
+* `code` and `message` are stable; `message` is fixed per code and never contains the text of an
+  exception. The details are written to the server log (`ERROR` with the stack trace for `5xx`,
+  `DEBUG` for `4xx`).
+* `fieldErrors` is always present, empty unless the request failed validation. The keys are the
+  names of the fields or parameters, sorted; several errors of one field are joined with `; `.
+  The messages are the ones of the constraints, always in English (`spring.web.locale-resolver:
+  fixed`); a failed conversion is reported as `has an invalid value`, never with Java types.
+* The handler is `org.example.web.error.ApiExceptionHandler`. It covers the requests that reach
+  Spring MVC; an error raised before (for instance by Tomcat for an invalid URL) gets the default
+  body of Spring Boot, without message or stack trace.
 
 ## Configuration
 

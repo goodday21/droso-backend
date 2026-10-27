@@ -113,6 +113,32 @@ must not believe it has set them, and a misspelt `"priorty"` must not silently f
 Only the first unknown property is reported. An enum is not read from its index either
 (`"priority": 2` is rejected).
 
+### Getting a defect
+
+`GET /api/v1/defects/{id}`
+
+**HTTP 200** with the stored defect, in the same format as the response of `POST` above. Nothing is
+written: the request runs in a read-only transaction.
+
+**HTTP 404** `RESOURCE_NOT_FOUND` if there is no defect with this id. The body names neither the
+resource nor the id.
+
+**HTTP 400** `VALIDATION_ERROR` with `"fieldErrors": {"id": "has an invalid value"}` if the id is not
+in its canonical form: a positive decimal number of ASCII digits, without sign, leading zeros or
+whitespace, at most `9223372036854775807`. So `abc`, `1.5`, `0`, `-1` are rejected, and so are
+`026`, `+26`, `0x1A`, `%231A` (`#1A`) and `%2026`, which the default conversion of Spring would
+silently read as the defect 26 (`org.example.web.CanonicalIdEditor`).
+
+Two cases are decided by the servlet container, before this check:
+
+* A path parameter is removed from the URL, as the Servlet specification provides:
+  `/api/v1/defects/26;x=1` is the defect 26.
+* An encoded slash, backslash or NUL (`%2F`, `%5C`, `%00`) is rejected by Tomcat with `400` and its
+  bare HTML error page, not with the body below.
+
+`GET /api/v1/defects` (the list) does not exist and answers `405 METHOD_NOT_ALLOWED`;
+`/api/v1/defects/` and `/api/v1/defects/26/x` answer `404`.
+
 ### Error responses
 
 Every error of the API (except the `503` of the health endpoint above) has the same body:
@@ -348,8 +374,17 @@ SELECT id, title, priority, status, created_at, updated_at FROM defects;
 
 `'{"title": "   "}'` answers `400 VALIDATION_ERROR` with `fieldErrors.title`, `'{"title": "Login
 fails", "status": "CLOSED"}'` answers `400` with `"status": "is not allowed"`, `'{"title": '`
-answers `400 MALFORMED_REQUEST`. `GET /api/v1/defects/{id}` does not exist yet, so the `Location`
-answers `404` for now.
+answers `400 MALFORMED_REQUEST`.
+
+### Getting a defect
+
+```bash
+curl -i http://localhost:8080/api/v1/defects/1
+```
+
+`200` with the defect created above. `/api/v1/defects/999999` answers `404 RESOURCE_NOT_FOUND`,
+`/api/v1/defects/abc` and `/api/v1/defects/0x1` answer `400 VALIDATION_ERROR` with
+`fieldErrors.id`. The row in the database is unchanged by the GET.
 
 On Windows, `curl` does not pass a non-ASCII `-d` argument as UTF-8, so a Cyrillic title arrives as
 invalid UTF-8 and answers `400 MALFORMED_REQUEST`. Put such a body into a UTF-8 file and send it

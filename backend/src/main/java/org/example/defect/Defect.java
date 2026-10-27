@@ -24,8 +24,14 @@ import jakarta.persistence.Table;
 @Table(name = "defects")
 public class Defect {
 
-    static final int TITLE_MIN_LENGTH = 5;
-    static final int TITLE_MAX_LENGTH = 120;
+    // The limits of the text fields, in characters (code points), as in the VARCHAR columns.
+    // Public, so that the request DTOs validate the same limits instead of repeating the numbers.
+    public static final int TITLE_MIN_LENGTH = 5;
+    public static final int TITLE_MAX_LENGTH = 120;
+    public static final int DESCRIPTION_MAX_LENGTH = 2000;
+    public static final int STEPS_TO_REPRODUCE_MAX_LENGTH = 5000;
+    public static final int EXPECTED_RESULT_MAX_LENGTH = 2000;
+    public static final int ACTUAL_RESULT_MAX_LENGTH = 2000;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -34,16 +40,16 @@ public class Defect {
     @Column(name = "title", nullable = false, length = TITLE_MAX_LENGTH)
     private String title;
 
-    @Column(name = "description", length = 2000)
+    @Column(name = "description", length = DESCRIPTION_MAX_LENGTH)
     private String description;
 
-    @Column(name = "steps_to_reproduce", length = 5000)
+    @Column(name = "steps_to_reproduce", length = STEPS_TO_REPRODUCE_MAX_LENGTH)
     private String stepsToReproduce;
 
-    @Column(name = "expected_result", length = 2000)
+    @Column(name = "expected_result", length = EXPECTED_RESULT_MAX_LENGTH)
     private String expectedResult;
 
-    @Column(name = "actual_result", length = 2000)
+    @Column(name = "actual_result", length = ACTUAL_RESULT_MAX_LENGTH)
     private String actualResult;
 
     @Enumerated(EnumType.STRING)

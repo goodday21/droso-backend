@@ -132,21 +132,48 @@ class ApiExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("an unknown enum value answers 400 MALFORMED_REQUEST without naming Java types")
+    @DisplayName("an unknown enum value answers 400 VALIDATION_ERROR for the field, without the value or Java types")
     void unknownEnumValue() throws Exception {
         String body = body(postJson("{\"title\": \"Login fails\", \"level\": \"URGENT\"}")
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST")));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("Request validation failed"))
+                .andExpect(jsonPath("$.fieldErrors.level").value("has an invalid value"))
+                .andExpect(jsonPath("$.fieldErrors.*", Matchers.hasSize(1))));
 
         assertThat(body).doesNotContain("URGENT").doesNotContain("Level").doesNotContain("org.example");
     }
 
     @Test
-    @DisplayName("a value of the wrong JSON type answers 400 MALFORMED_REQUEST")
+    @DisplayName("a value of the wrong JSON type answers 400 VALIDATION_ERROR for the field")
     void wrongJsonType() throws Exception {
-        postJson("{\"title\": {\"nested\": true}}")
+        String body = body(postJson("{\"title\": {\"nested\": true}}")
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors.title").value("has an invalid value")));
+
+        assertThat(body).doesNotContain("String").doesNotContain("nested");
+    }
+
+    @Test
+    @DisplayName("an unknown property answers 400 VALIDATION_ERROR naming the property")
+    void unknownProperty() throws Exception {
+        String body = body(postJson("{\"title\": \"Login fails\", \"severity\": \"high\"}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors.severity").value("is not allowed"))
+                .andExpect(jsonPath("$.fieldErrors.*", Matchers.hasSize(1))));
+
+        assertThat(body).doesNotContain("ProbeBody").doesNotContain("known properties");
+    }
+
+    @Test
+    @DisplayName("a body of the wrong shape as a whole answers 400 MALFORMED_REQUEST")
+    void wrongBodyShape() throws Exception {
+        postJson("[{\"title\": \"Login fails\"}]")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty());
     }
 
     @Test

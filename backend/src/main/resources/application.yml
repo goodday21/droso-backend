@@ -44,6 +44,17 @@ spring:
     # Do not keep the persistence context open for the whole HTTP request.
     open-in-view: false
 
+  jackson:
+    deserialization:
+      # Jackson 3 ignores unknown JSON properties by default. They are rejected instead
+      # (400 VALIDATION_ERROR naming the property): a client that sends "id" or "status" must not
+      # believe it has set them, and a misspelt "priorty" must not silently fall back to MEDIUM.
+      fail-on-unknown-properties: true
+    datatype:
+      enum:
+        # Otherwise an enum is also read from its index: "priority": 2 would silently become HIGH.
+        fail-on-numbers-for-enums: true
+
   web:
     # The messages of Bean Validation are part of the error responses. They are interpolated in
     # the locale of the request, so a Russian browser would get "не должно быть пустым" instead of

@@ -10,7 +10,8 @@ Guidance for Claude Code in this repository. The user-facing documentation is
 - The Angular frontend lives in its own repository, `droso-frontend` (cloned next to this one).
 - Packages under `org.example`:
   - `health` — `GET /api/v1/health` (200 UP / 503 DOWN, runs `SELECT 1`, touches no table).
-  - `defect` — JPA entity `Defect` with `DefectPriority` and `DefectStatus`. No REST API yet.
+  - `defect` — JPA entity `Defect` with `DefectPriority` and `DefectStatus`, `DefectRepository`,
+    `DefectService`, `DefectController` (`POST /api/v1/defects` only); DTOs in `defect.model`.
   - `web.error` — `ApiExceptionHandler`, `ApiError`, `ErrorCode`, `ResourceNotFoundException`.
 - `src/test/java/org/example/tools` holds the local database launcher (`PostgresLauncher`,
   `LocalDatabaseConfig`); it is not test code, it lives there to use the test dependencies.
@@ -48,8 +49,11 @@ Every API error is an `ApiError`: `{status, code, message, fieldErrors}`. `field
 present (`{}` when empty), sorted, several errors of one field joined with `; `. Codes:
 `VALIDATION_ERROR` (400), `MALFORMED_REQUEST` (400), `RESOURCE_NOT_FOUND` (404),
 `INTERNAL_ERROR` (500), otherwise the name of the HTTP status (`METHOD_NOT_ALLOWED`, …).
-Messages are fixed per code: never put the text of an exception into a response. Throw
-`ResourceNotFoundException` for a missing resource. The health 200/503 bodies are a separate
+Messages are fixed per code: never put the text of an exception into a response. Unknown JSON
+properties and enum indexes are rejected (`spring.jackson.*` in `application.yml`); a Jackson error
+with a property path is a `VALIDATION_ERROR` of that property, other unreadable bodies are
+`MALFORMED_REQUEST`. Text lengths are validated with `@CodePointLength` (as `VARCHAR` counts them),
+not `@Size`. Throw `ResourceNotFoundException` for a missing resource. The health 200/503 bodies are a separate
 contract (followed by `droso-frontend`) and must not change.
 
 ## Tests

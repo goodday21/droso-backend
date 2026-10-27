@@ -29,6 +29,9 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.exc.MismatchedInputException;
+import tools.jackson.databind.exc.UnrecognizedPropertyException;
 
 /**
  * Turns every exception of the web layer into an {@link ApiError}.
@@ -49,6 +52,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     /** Replaces the messages of failed conversions, which name Java types and the rejected value. */
     static final String INVALID_VALUE = "has an invalid value";
     static final String REQUIRED = "is required";
+    /** A JSON property the request body does not have (unknown properties are rejected). */
+    static final String NOT_ALLOWED = "is not allowed";
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiError> handleResourceNotFound(ResourceNotFoundException e) {
@@ -90,8 +95,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         if (ex instanceof MissingServletRequestParameterException e) {
             return ApiError.of(ErrorCode.VALIDATION_ERROR, single(e.getParameterName(), REQUIRED));
         }
-        if (ex instanceof HttpMessageNotReadableException) {
-            return ApiError.of(ErrorCode.MALFORMED_REQUEST);
+        if (ex instanceof HttpMessageNotReadableException e) {
+            return bodyError(e);
         }
         if (ex instanceof NoResourceFoundException || ex instanceof NoHandlerFoundException
                 || statusCode.value() == ErrorCode.RESOURCE_NOT_FOUND.status().value()) {
@@ -101,6 +106,41 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             return ApiError.of(ErrorCode.INTERNAL_ERROR);
         }
         return ApiError.of(statusCode);
+    }
+
+    /**
+     * A body that is valid JSON but does not fit the request type (an unknown property, an unknown
+     * enum value, a value of the wrong JSON type) is reported for the property it concerns, like a
+     * violated constraint; the rejected value is not repeated. Everything else, i.e. invalid JSON,
+     * a missing body or a body of the wrong shape as a whole, is a malformed request.
+     */
+    private static ApiError bodyError(HttpMessageNotReadableException e) {
+        if (e.getCause() instanceof MismatchedInputException cause) {
+            String path = propertyPath(cause.getPath());
+            if (path != null) {
+                String message = cause instanceof UnrecognizedPropertyException ? NOT_ALLOWED : INVALID_VALUE;
+                return ApiError.of(ErrorCode.VALIDATION_ERROR, Map.of(path, message));
+            }
+        }
+        return ApiError.of(ErrorCode.MALFORMED_REQUEST);
+    }
+
+    /**
+     * The path in the notation of the field errors ({@code steps[0].text}), or {@code null} if the
+     * failure concerns the body as a whole or a part of the path is unknown.
+     */
+    private static @Nullable String propertyPath(List<JacksonException.Reference> references) {
+        StringBuilder path = new StringBuilder();
+        for (JacksonException.Reference reference : references) {
+            if (reference.getPropertyName() != null) {
+                path.append(path.isEmpty() ? "" : ".").append(reference.getPropertyName());
+            } else if (reference.getIndex() >= 0 && !path.isEmpty()) {
+                path.append('[').append(reference.getIndex()).append(']');
+            } else {
+                return null;
+            }
+        }
+        return path.isEmpty() ? null : path.toString();
     }
 
     private static Map<String, String> fieldErrors(List<FieldError> errors) {

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 
 import jakarta.persistence.EntityManager;
@@ -49,7 +50,9 @@ class DefectPersistenceIntegrationTest extends PostgresIntegrationTest {
     @Test
     @DisplayName("a defect with every field is persisted and read back unchanged")
     void persistsAndReadsEveryField() {
-        Instant before = Instant.now();
+        // createdAt is truncated to microseconds, the clock is not: an untruncated "before" may lie
+        // inside the same microsecond, after the stored value.
+        Instant before = Instant.now().truncatedTo(ChronoUnit.MICROS);
         Defect saved = persist(new Defect("  Login fails  ", "The login form rejects valid credentials",
                 "1. Open /login\n2. Enter valid credentials", "The dashboard opens",
                 "\"Invalid password\" is shown", DefectPriority.HIGH));

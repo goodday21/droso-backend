@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -64,7 +65,9 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
     @Test
     @DisplayName("a full request is stored and answered with 201, the stored defect and its Location")
     void createsFullDefect() throws Exception {
-        Instant before = Instant.now();
+        // createdAt is truncated to microseconds, the clock is not: an untruncated "before" may lie
+        // inside the same microsecond, after the stored value.
+        Instant before = Instant.now().truncatedTo(ChronoUnit.MICROS);
         String body = mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("""
                         {
                           "title": "Ошибка при сохранении профиля",

@@ -11,7 +11,10 @@ Guidance for Claude Code in this repository. The user-facing documentation is
 - Packages under `org.example`:
   - `health` — `GET /api/v1/health` (200 UP / 503 DOWN, runs `SELECT 1`, touches no table).
   - `defect` — JPA entity `Defect` with `DefectPriority` and `DefectStatus`, `DefectRepository`,
-    `DefectService`, `DefectController` (`POST /api/v1/defects` only); DTOs in `defect.model`.
+    `DefectService`, `DefectController` (`POST /api/v1/defects`, `GET /api/v1/defects/{id}`);
+    DTOs in `defect.model`.
+  - `web` — `CanonicalIdEditor`: ids of URLs in canonical decimal form only (Spring's default
+    conversion would read `0x1A`, `026`, `+26` as 26); register it with `@InitBinder` per controller.
   - `web.error` — `ApiExceptionHandler`, `ApiError`, `ErrorCode`, `ResourceNotFoundException`.
 - `src/test/java/org/example/tools` holds the local database launcher (`PostgresLauncher`,
   `LocalDatabaseConfig`); it is not test code, it lives there to use the test dependencies.

@@ -53,7 +53,7 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
         Integer failed = jdbc.queryForObject(
                 "SELECT count(*) FROM flyway_schema_history WHERE success = false", Integer.class);
 
-        assertThat(versions).contains("1", "2", "3");
+        assertThat(versions).contains("1", "2", "3", "4");
         assertThat(failed).isZero();
         assertThat(tableExists(jdbc, "demo_item")).isTrue();
         assertThat(tableExists(jdbc, "defects")).isTrue();
@@ -137,7 +137,7 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
         assertThat(jdbc.queryForList("SELECT name FROM demo_item", String.class)).containsExactly("kept");
         assertThat(jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success = true", String.class))
-                .contains("1", "2", "3");
+                .contains("1", "2", "3", "4");
     }
 
     @Test
@@ -158,6 +158,33 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    @DisplayName("the widened password hash keeps the stored users and fits an Argon2id hash")
+    void upgradeWidensPasswordHash() throws Exception {
+        new JdbcTemplate(postgres().getPostgresDatabase()).execute("CREATE DATABASE upgrade_password_hash");
+        DataSource upgraded = postgres().getDatabase("postgres", "upgrade_password_hash");
+        JdbcTemplate jdbc = new JdbcTemplate(upgraded);
+        String bcrypt = "{bcrypt}$2a$12$" + "s".repeat(22) + "h".repeat(31);
+        // The format of Spring's Argon2PasswordEncoder with its default parameters: 105 characters.
+        String argon2 = "{argon2}$argon2id$v=19$m=16384,t=2,p=1$" + "s".repeat(22) + "$" + "h".repeat(43);
+        String insert = "INSERT INTO users (email, password_hash, role_code, created_at, updated_at)"
+                + " VALUES (?, ?, 'USER', now(), now())";
+
+        Flyway.configure().dataSource(upgraded).locations("classpath:db/migration").target("3").load().migrate();
+        jdbc.update(insert, "kept@b.cd", bcrypt);
+        assertThatThrownBy(() -> jdbc.update(insert, "argon@b.cd", argon2))
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        Flyway.configure().dataSource(upgraded).locations("classpath:db/migration").load().migrate();
+
+        assertThat(argon2).hasSize(105);
+        jdbc.update(insert, "argon@b.cd", argon2);
+        assertThat(jdbc.queryForList("SELECT password_hash FROM users ORDER BY id", String.class))
+                .containsExactly(bcrypt, argon2);
+        assertThatThrownBy(() -> jdbc.update(insert, "long@b.cd", "x".repeat(256)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     @DisplayName("the users table has the expected columns, types, lengths and nullability")
     void usersColumns() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
@@ -175,7 +202,7 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
         assertThat(columns).containsExactly(
                 "id bigint null NO YES",
                 "email character varying 254 NO NO",
-                "password_hash character varying 100 NO NO",
+                "password_hash character varying 255 NO NO",
                 "role_code character varying 32 NO NO",
                 "deleted_at timestamp with time zone null YES NO",
                 "created_at timestamp with time zone null NO NO",

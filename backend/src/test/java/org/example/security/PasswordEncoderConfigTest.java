@@ -17,8 +17,8 @@ class PasswordEncoderConfigTest {
         String hash = encoder.encode("Abcdef1!");
 
         assertThat(hash).startsWith("{bcrypt}$2a$12$").doesNotContain("Abcdef1!");
-        // The column password_hash is VARCHAR(100).
-        assertThat(hash).hasSizeLessThanOrEqualTo(100);
+        // The column password_hash is VARCHAR(255) (V4__widen_password_hash.sql).
+        assertThat(hash).hasSizeLessThanOrEqualTo(255);
     }
 
     @Test

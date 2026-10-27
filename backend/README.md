@@ -63,9 +63,7 @@ This section is the source of truth of the contract: the frontend model
 {
   "title": "Profile changes are not saved",
   "description": "The changes are lost after editing the profile",
-  "stepsToReproduce": "1. Open the profile
-2. Change the name
-3. Click Save",
+  "stepsToReproduce": "1. Open the profile\n2. Change the name\n3. Click Save",
   "expectedResult": "The new name is saved",
   "actualResult": "The old name is shown",
   "priority": "HIGH"
@@ -74,11 +72,16 @@ This section is the source of truth of the contract: the frontend model
 
 | Field              | Rule                                                                         |
 |--------------------|------------------------------------------------------------------------------|
-| `title`            | Required; 5..120 characters after stripping the surrounding whitespace, stored stripped |
+| `title`            | Required; 5..120 characters after stripping the surrounding invisible characters, stored stripped |
 | `description`      | Optional, at most 2000 characters                                            |
 | `stepsToReproduce` | Optional, at most 5000 characters                                            |
 | `expectedResult`   | Optional, at most 2000 characters                                            |
 | `actualResult`     | Optional, at most 2000 characters                                            |
+
+*Invisible* are the whitespace, the no-break spaces (U+00A0, U+2007, U+202F) and the other space
+separators, and the zero-width characters (U+200B, U+200C, U+200D, U+2060, U+FEFF, …): a title of
+five no-break spaces is blank. An optional field that is invisible as a whole is stored as `null`;
+any other is stored exactly as sent, its surrounding whitespace and line breaks included.
 | `priority`         | Optional: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL` (exact case); `MEDIUM` when absent or `null` |
 
 Lengths are counted in characters (Unicode code points), as by the `VARCHAR` columns: an emoji is
@@ -91,9 +94,7 @@ one character.
   "id": 1,
   "title": "Profile changes are not saved",
   "description": "The changes are lost after editing the profile",
-  "stepsToReproduce": "1. Open the profile
-2. Change the name
-3. Click Save",
+  "stepsToReproduce": "1. Open the profile\n2. Change the name\n3. Click Save",
   "expectedResult": "The new name is saved",
   "actualResult": "The old name is shown",
   "priority": "HIGH",

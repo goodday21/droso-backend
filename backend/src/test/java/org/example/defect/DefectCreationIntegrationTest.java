@@ -262,6 +262,42 @@ class DefectCreationIntegrationTest {
         rejected(Map.of("title", title), "title", "length must be between 5 and 120; must not be blank");
     }
 
+    /**
+     * Characters that {@code String.strip()} keeps: the no-break spaces are not
+     * {@code Character.isWhitespace}, the zero-width ones are not even space characters.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "     ",   // NO-BREAK SPACE
+            "     ",   // FIGURE SPACE
+            "     ",   // NARROW NO-BREAK SPACE
+            "​​​​​",   // ZERO WIDTH SPACE
+            "⁠⁠⁠⁠⁠",   // WORD JOINER
+            "﻿﻿﻿﻿﻿",   // ZERO WIDTH NO-BREAK SPACE (BOM)
+            "　　　　　",   // IDEOGRAPHIC SPACE
+            "  \t​\n﻿  "})
+    @DisplayName("a title of invisible characters only, e.g. no-break or zero-width spaces, is rejected")
+    void invisibleTitleIsRejected(String title) throws Exception {
+        rejected(Map.of("title", title), "title", "length must be between 5 and 120; must not be blank");
+    }
+
+    @Test
+    @DisplayName("invisible characters around the title are stripped, the ones inside are kept")
+    void invisibleCharactersAroundTheTitleAreStripped() throws Exception {
+        String body = body(create(Map.of("title", "﻿  Login fails ​ "))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.title").value("Login fails")));
+
+        assertThat(jdbc.queryForObject("SELECT title FROM defects WHERE id = ?", String.class, id(body)))
+                .isEqualTo("Login fails");
+    }
+
+    @Test
+    @DisplayName("a title of 4 characters surrounded by invisible characters is rejected")
+    void shortTitleWithInvisibleCharactersIsRejected() throws Exception {
+        rejected(Map.of("title", "  abcd​​"), "title", "length must be between 5 and 120");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"abcd", "  abcd  "})
     @DisplayName("a title shorter than 5 characters after stripping is rejected")
@@ -304,6 +340,40 @@ class DefectCreationIntegrationTest {
     void optionalFieldTooLong(String field, int max) throws Exception {
         rejected(Map.of("title", "Crash on start", field, "x".repeat(max + 1)),
                 field, "length must be between 0 and " + max);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"description", "stepsToReproduce", "expectedResult", "actualResult"})
+    @DisplayName("an optional field of invisible characters only is stored as null")
+    void invisibleOptionalFieldIsNull(String field) throws Exception {
+        // Blank however long: it is not stored, so its length does not matter.
+        for (String blank : new String[] {"", "  \t\n  ", " ​﻿ ", " ".repeat(6000)}) {
+            create(Map.of("title", "Crash on start", field, blank))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$." + field).value(Matchers.nullValue()));
+        }
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM defects", Long.class)).isEqualTo(4);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM defects WHERE description IS NOT NULL"
+                + " OR steps_to_reproduce IS NOT NULL OR expected_result IS NOT NULL OR actual_result IS NOT NULL",
+                Long.class)).isZero();
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @CsvSource({
+            "description,      description",
+            "stepsToReproduce, steps_to_reproduce",
+            "expectedResult,   expected_result",
+            "actualResult,     actual_result"})
+    @DisplayName("an optional field with visible text is stored exactly as sent, whitespace included")
+    void optionalFieldIsStoredAsSent(String field, String column) throws Exception {
+        String value = "  1. abc\n2. абв\n\n3.PROFIT \n";
+        String body = body(create(Map.of("title", "Crash on start", field, value))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$." + field).value(value)));
+
+        assertThat(jdbc.queryForObject("SELECT " + column + " FROM defects WHERE id = ?", String.class, id(body)))
+                .isEqualTo(value);
     }
 
     @Test

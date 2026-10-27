@@ -37,8 +37,12 @@ PostgreSQL. Spring Boot 4 differs from 3 in ways that are easy to get wrong:
 - Enums are stored as `VARCHAR` by name with a `CHECK` constraint listing the values: a new enum
   value needs a migration replacing the constraint. Timestamps are `TIMESTAMPTZ` mapped to `Instant`.
 - `Defect`: the title is stripped and must be 5..120 code points (`IllegalArgumentException`
-  otherwise); priority defaults to `MEDIUM`; status is always `NEW`; `@PrePersist` sets
+  otherwise); an optional text that is invisible as a whole is stored as `null`, any other is kept
+  as given; priority defaults to `MEDIUM`; status is always `NEW`; `@PrePersist` sets
   `createdAt == updatedAt`, truncated to microseconds. No setters, no `@PreUpdate` yet.
+- "Stripped" and "blank" mean `InvisibleText`, never `String.strip()`/`isBlank()` alone: those miss
+  the no-break spaces (U+00A0, U+2007, U+202F) and the zero-width characters. The DTO normalizes
+  the same way before validation, so that the rules apply to the stored values.
 - The local database of `./gradlew runPostgres` lives in `backend/.postgres/data` (ignored by Git).
   It used to be `build/postgres-data`: if that directory still exists, `./gradlew clean` deletes a
   developer's database. For a full rebuild prefer `./gradlew build --rerun-tasks`.

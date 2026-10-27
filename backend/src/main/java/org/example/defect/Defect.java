@@ -71,21 +71,22 @@ public class Defect {
     }
 
     /**
-     * @param title            required; 5..120 characters after trimming, stored trimmed
-     * @param description      optional
-     * @param stepsToReproduce optional
-     * @param expectedResult   optional
-     * @param actualResult     optional
+     * @param title            required; 5..120 characters after trimming the invisible characters
+     *                         ({@link InvisibleText}), stored trimmed
+     * @param description      optional; {@code null} when invisible as a whole, otherwise kept as given
+     * @param stepsToReproduce optional; as {@code description}
+     * @param expectedResult   optional; as {@code description}
+     * @param actualResult     optional; as {@code description}
      * @param priority         optional; {@link DefectPriority#MEDIUM} when {@code null}
      * @throws IllegalArgumentException if the title violates its length rule
      */
     public Defect(String title, String description, String stepsToReproduce, String expectedResult,
             String actualResult, DefectPriority priority) {
         this.title = normalizeTitle(title);
-        this.description = description;
-        this.stepsToReproduce = stepsToReproduce;
-        this.expectedResult = expectedResult;
-        this.actualResult = actualResult;
+        this.description = InvisibleText.blankToNull(description);
+        this.stepsToReproduce = InvisibleText.blankToNull(stepsToReproduce);
+        this.expectedResult = InvisibleText.blankToNull(expectedResult);
+        this.actualResult = InvisibleText.blankToNull(actualResult);
         if (priority != null) {
             this.priority = priority;
         }
@@ -95,7 +96,7 @@ public class Defect {
         if (title == null) {
             throw new IllegalArgumentException("The title is required");
         }
-        String trimmed = title.strip();
+        String trimmed = InvisibleText.strip(title);
         // Code points rather than UTF-16 units, so that the rule counts characters the way the
         // VARCHAR(120) column does.
         int length = trimmed.codePointCount(0, trimmed.length());

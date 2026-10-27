@@ -22,6 +22,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     // Bean Validation (Hibernate Validator) of the request bodies and parameters.
     implementation("org.springframework.boot:spring-boot-starter-validation")
+    // The password encoders (BCrypt) only. The rest of Spring Security comes with the login: until
+    // then it would answer every request of the API with 401.
+    implementation("org.springframework.security:spring-security-crypto")
 
     // Spring Boot 4 split the auto-configuration of Flyway into a dedicated module.
     implementation("org.springframework.boot:spring-boot-flyway")

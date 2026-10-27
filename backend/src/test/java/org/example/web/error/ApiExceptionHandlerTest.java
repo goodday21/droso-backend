@@ -12,6 +12,8 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import org.example.auth.EmailAlreadyRegisteredException;
+import org.example.auth.RegistrationDisabledException;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -66,6 +68,16 @@ class ApiExceptionHandlerTest {
 
         @GetMapping("/page")
         void page(@RequestParam @Min(1) int size) {
+        }
+
+        @GetMapping("/taken")
+        void taken() {
+            throw new EmailAlreadyRegisteredException(new IllegalStateException(SECRET));
+        }
+
+        @GetMapping("/closed")
+        void closed() {
+            throw new RegistrationDisabledException();
         }
 
         @GetMapping("/failure")
@@ -235,6 +247,32 @@ class ApiExceptionHandlerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.fieldErrors.size").value("is required"));
+    }
+
+    @Test
+    @DisplayName("a taken email answers 409 EMAIL_ALREADY_REGISTERED naming the field, without the cause")
+    void emailAlreadyRegistered() throws Exception {
+        String body = body(mockMvc.perform(get("/probe/taken"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.code").value("EMAIL_ALREADY_REGISTERED"))
+                .andExpect(jsonPath("$.message").value("Email is already registered"))
+                .andExpect(jsonPath("$.fieldErrors.email").value("is already registered"))
+                .andExpect(jsonPath("$.fieldErrors.*", Matchers.hasSize(1)))
+                .andExpect(jsonPath("$.*", Matchers.hasSize(4))));
+
+        assertThat(body).doesNotContain("secret_db").doesNotContain("active user");
+    }
+
+    @Test
+    @DisplayName("a turned-off registration answers 403 REGISTRATION_DISABLED")
+    void registrationDisabled() throws Exception {
+        mockMvc.perform(get("/probe/closed"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.code").value("REGISTRATION_DISABLED"))
+                .andExpect(jsonPath("$.message").value("Registration is disabled"))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty());
     }
 
     @Test

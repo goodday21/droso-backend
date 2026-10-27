@@ -13,6 +13,14 @@ Guidance for Claude Code in this repository. The user-facing documentation is
   - `defect` — JPA entity `Defect` with `DefectPriority` and `DefectStatus`, `DefectRepository`,
     `DefectService`, `DefectController` (`POST /api/v1/defects`, `GET /api/v1/defects/{id}`);
     DTOs in `defect.model`.
+  - `user` — JPA entity `User` (table `users`), `Role` (`ADMIN`, `MANAGER`, `USER`; one per user),
+    `UserRepository`, the rules `EmailAddress` and `PasswordPolicy`, their constraints
+    `@ValidEmail`/`@ValidPassword` in `user.validation`; `UserResponse` in `user.model`.
+  - `auth` — `AuthController` (`POST /api/v1/auth/register`), `RegistrationService`,
+    `AuthProperties` (`droso.auth.*`); DTOs in `auth.model`.
+  - `security` — `PasswordEncoderConfig` (BCrypt cost 12 behind a `DelegatingPasswordEncoder`).
+    Only `spring-security-crypto` is on the classpath; the rest of Spring Security comes with the login.
+  - `text` — `InvisibleText`.
   - `web` — `CanonicalIdEditor`: ids of URLs in canonical decimal form only (Spring's default
     conversion would read `0x1A`, `026`, `+26` as 26); register it with `@InitBinder` per controller.
   - `web.error` — `ApiExceptionHandler`, `ApiError`, `ErrorCode`, `ResourceNotFoundException`.
@@ -46,6 +54,14 @@ PostgreSQL. Spring Boot 4 differs from 3 in ways that are easy to get wrong:
 - "Stripped" and "blank" mean `InvisibleText`, never `String.strip()`/`isBlank()` alone: those miss
   the no-break spaces (U+00A0, U+2007, U+202F) and the zero-width characters. The DTO normalizes
   the same way before validation, so that the rules apply to the stored values.
+- `User`: the email is the login, stored stripped (`InvisibleText`) and lower-cased with
+  `Locale.ROOT` (the column has a `CHECK` for it); the part after `+` is kept. The password is never
+  normalized and never stored, logged or returned: only `password_hash` (`{bcrypt}$2a$12$...`), and
+  a DTO that holds a password overrides `toString()`. Soft delete is `deleted_at`; the email is
+  unique among the active users only (partial index `users_email_active_key`, whose violation the
+  registration maps to 409 — no "exists" query before the insert). Roles are rows of `roles`
+  referenced by `users.role_code`: a new role needs a migration that inserts it, and `Role` must
+  list the same codes. `@PreUpdate` refreshes `updated_at`.
 - The local database of `./gradlew runPostgres` lives in `backend/.postgres/data` (ignored by Git).
   It used to be `build/postgres-data`: if that directory still exists, `./gradlew clean` deletes a
   developer's database. For a full rebuild prefer `./gradlew build --rerun-tasks`.
@@ -54,7 +70,8 @@ PostgreSQL. Spring Boot 4 differs from 3 in ways that are easy to get wrong:
 
 Every API error is an `ApiError`: `{status, code, message, fieldErrors}`. `fieldErrors` is always
 present (`{}` when empty), sorted, several errors of one field joined with `; `. Codes:
-`VALIDATION_ERROR` (400), `MALFORMED_REQUEST` (400), `RESOURCE_NOT_FOUND` (404),
+`VALIDATION_ERROR` (400), `MALFORMED_REQUEST` (400), `REGISTRATION_DISABLED` (403),
+`RESOURCE_NOT_FOUND` (404), `EMAIL_ALREADY_REGISTERED` (409, with `fieldErrors.email`),
 `INTERNAL_ERROR` (500), otherwise the name of the HTTP status (`METHOD_NOT_ALLOWED`, …).
 Messages are fixed per code: never put the text of an exception into a response. Unknown JSON
 properties and enum indexes are rejected (`spring.jackson.*` in `application.yml`); a Jackson error

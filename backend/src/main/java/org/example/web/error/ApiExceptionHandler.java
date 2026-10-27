@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.example.auth.EmailAlreadyRegisteredException;
+import org.example.auth.RegistrationDisabledException;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,11 +56,25 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     static final String REQUIRED = "is required";
     /** A JSON property the request body does not have (unknown properties are rejected). */
     static final String NOT_ALLOWED = "is not allowed";
+    static final String ALREADY_REGISTERED = "is already registered";
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiError> handleResourceNotFound(ResourceNotFoundException e) {
         log.debug("Resource not found: {}", e.getMessage());
         return respond(ApiError.of(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    /** Names the field as well, so that the client can show the error next to it. */
+    @ExceptionHandler(EmailAlreadyRegisteredException.class)
+    public ResponseEntity<ApiError> handleEmailAlreadyRegistered(EmailAlreadyRegisteredException e) {
+        log.debug("Registration rejected: {}", e.getMessage());
+        return respond(ApiError.of(ErrorCode.EMAIL_ALREADY_REGISTERED, Map.of("email", ALREADY_REGISTERED)));
+    }
+
+    @ExceptionHandler(RegistrationDisabledException.class)
+    public ResponseEntity<ApiError> handleRegistrationDisabled(RegistrationDisabledException e) {
+        log.debug("Registration rejected: {}", e.getMessage());
+        return respond(ApiError.of(ErrorCode.REGISTRATION_DISABLED));
     }
 
     @ExceptionHandler(Exception.class)

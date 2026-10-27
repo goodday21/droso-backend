@@ -1,4 +1,4 @@
-package org.example.defect;
+package org.example.text;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

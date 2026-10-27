@@ -1,4 +1,4 @@
-package org.example.defect;
+package org.example.text;
 
 /**
  * Removes the characters a user cannot see, so that a text made of them only counts as empty.

@@ -3,12 +3,16 @@ package org.example.flyway;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 import javax.sql.DataSource;
 
 import org.example.support.PostgresIntegrationTest;
+import org.example.user.Role;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,7 +44,7 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("a clean database gets the baseline and the defects migration, and keeps the baseline table")
+    @DisplayName("a clean database gets every migration, and keeps the baseline table")
     void cleanDatabaseGetsEveryMigration() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
 
@@ -49,10 +53,12 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
         Integer failed = jdbc.queryForObject(
                 "SELECT count(*) FROM flyway_schema_history WHERE success = false", Integer.class);
 
-        assertThat(versions).contains("1", "2");
+        assertThat(versions).contains("1", "2", "3");
         assertThat(failed).isZero();
         assertThat(tableExists(jdbc, "demo_item")).isTrue();
         assertThat(tableExists(jdbc, "defects")).isTrue();
+        assertThat(tableExists(jdbc, "users")).isTrue();
+        assertThat(tableExists(jdbc, "roles")).isTrue();
     }
 
     @Test
@@ -127,10 +133,103 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
         Flyway.configure().dataSource(upgraded).locations("classpath:db/migration").load().migrate();
 
         assertThat(tableExists(jdbc, "defects")).isTrue();
+        assertThat(tableExists(jdbc, "users")).isTrue();
         assertThat(jdbc.queryForList("SELECT name FROM demo_item", String.class)).containsExactly("kept");
         assertThat(jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success = true", String.class))
-                .contains("1", "2");
+                .contains("1", "2", "3");
+    }
+
+    @Test
+    @DisplayName("the users migration is applied on top of the defects migration and keeps the defects")
+    void upgradeFromDefects() throws Exception {
+        new JdbcTemplate(postgres().getPostgresDatabase()).execute("CREATE DATABASE upgrade_from_defects");
+        DataSource upgraded = postgres().getDatabase("postgres", "upgrade_from_defects");
+        JdbcTemplate jdbc = new JdbcTemplate(upgraded);
+
+        Flyway.configure().dataSource(upgraded).locations("classpath:db/migration").target("2").load().migrate();
+        assertThat(tableExists(jdbc, "users")).isFalse();
+        jdbc.update("INSERT INTO defects (title, created_at, updated_at) VALUES ('Kept defect', now(), now())");
+
+        Flyway.configure().dataSource(upgraded).locations("classpath:db/migration").load().migrate();
+
+        assertThat(tableExists(jdbc, "users")).isTrue();
+        assertThat(jdbc.queryForList("SELECT title FROM defects", String.class)).containsExactly("Kept defect");
+    }
+
+    @Test
+    @DisplayName("the users table has the expected columns, types, lengths and nullability")
+    void usersColumns() {
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+
+        List<String> columns = jdbc.query("""
+                SELECT column_name, data_type, character_maximum_length, is_nullable, is_identity
+                FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'users'
+                ORDER BY ordinal_position
+                """,
+                (rs, row) -> String.join(" ", rs.getString("column_name"), rs.getString("data_type"),
+                        String.valueOf(rs.getObject("character_maximum_length")),
+                        rs.getString("is_nullable"), rs.getString("is_identity")));
+
+        assertThat(columns).containsExactly(
+                "id bigint null NO YES",
+                "email character varying 254 NO NO",
+                "password_hash character varying 100 NO NO",
+                "role_code character varying 32 NO NO",
+                "deleted_at timestamp with time zone null YES NO",
+                "created_at timestamp with time zone null NO NO",
+                "updated_at timestamp with time zone null NO NO");
+    }
+
+    @Test
+    @DisplayName("the roles table holds exactly the values of the Role enum")
+    void rolesMatchTheEnum() {
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+
+        List<String> codes = jdbc.queryForList("SELECT code FROM roles", String.class);
+
+        assertThat(codes).containsExactlyInAnyOrder(
+                Arrays.stream(Role.values()).map(Role::name).toArray(String[]::new));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "INSERT INTO users (email, password_hash, role_code, created_at, updated_at) VALUES ('a@b.cd', 'h', 'ROOT', now(), now())",
+            "INSERT INTO users (email, password_hash, created_at, updated_at) VALUES ('a@b.cd', 'h', now(), now())",
+            "INSERT INTO users (email, password_hash, role_code, created_at, updated_at) VALUES ('A@b.cd', 'h', 'USER', now(), now())",
+            "INSERT INTO users (email, password_hash, role_code, created_at, updated_at) VALUES (NULL, 'h', 'USER', now(), now())",
+            "INSERT INTO users (email, password_hash, role_code, created_at, updated_at) VALUES ('a@b.cd', NULL, 'USER', now(), now())",
+            "INSERT INTO users (email, password_hash, role_code, updated_at) VALUES ('a@b.cd', 'h', 'USER', now())",
+            "INSERT INTO users (email, password_hash, role_code, created_at) VALUES ('a@b.cd', 'h', 'USER', now())"
+    })
+    @DisplayName("the users table rejects rows that violate its constraints")
+    void usersConstraints(String insert) {
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+
+        assertThatThrownBy(() -> jdbc.update(insert)).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @DisplayName("an email is unique among the active users only")
+    void emailUniqueAmongActiveUsers() {
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        String insert = "INSERT INTO users (email, password_hash, role_code, deleted_at, created_at, updated_at)"
+                + " VALUES ('unique@b.cd', 'h', 'USER', ?, now(), now())";
+        try {
+            jdbc.update(insert, (Object) null);
+            assertThatThrownBy(() -> jdbc.update(insert, (Object) null))
+                    .isInstanceOf(DataIntegrityViolationException.class)
+                    .hasMessageContaining("users_email_active_key");
+
+            // Deleted users with the same email may exist next to the active one.
+            jdbc.update(insert, Timestamp.from(Instant.now()));
+            jdbc.update(insert, Timestamp.from(Instant.now()));
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM users WHERE email = 'unique@b.cd'", Integer.class))
+                    .isEqualTo(3);
+        } finally {
+            jdbc.update("DELETE FROM users WHERE email = 'unique@b.cd'");
+        }
     }
 
     private static boolean tableExists(JdbcTemplate jdbc, String table) {

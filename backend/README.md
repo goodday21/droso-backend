@@ -139,6 +139,41 @@ Two cases are decided by the servlet container, before this check:
 `GET /api/v1/defects` (the list) does not exist and answers `405 METHOD_NOT_ALLOWED`;
 `/api/v1/defects/` and `/api/v1/defects/26/x` answer `404`.
 
+### Registering a user
+
+`POST /api/v1/auth/register` with `Content-Type: application/json`:
+
+```json
+{ "email": "qwe.qwe+1@gmail.com", "password": "Sup3r-Secret!" }
+```
+
+**HTTP 201** with the user (no `Location`: there is no resource of a single user yet). Neither the
+password nor its hash is ever returned:
+
+```json
+{ "id": 1, "email": "qwe.qwe+1@gmail.com", "role": "USER", "createdAt": "2026-10-27T10:15:30.123456Z" }
+```
+
+* **The role is always `USER`.** A request that sends `role` (or any other unknown property) answers
+  `400` with `"role": "is not allowed"`.
+* **email** — the login. It is stripped of the invisible characters around it and lowered in case
+  before it is validated and stored, so `Qwe@Gmail.com` and `qwe@gmail.com` are one account; the part
+  after `+` is kept, so `qwe+1@gmail.com` is another one. Valid: a local part of `a-z 0-9 . _ % + -`
+  (at most 64 characters, no dot at its ends or twice in a row), a domain of at least two labels of
+  `a-z 0-9 -` ending with a top-level domain of letters, at most 254 characters in all. Quoted local
+  parts, IP literals and non-ASCII addresses are rejected (`org.example.user.EmailAddress`).
+* **password** — 8..64 characters, printable ASCII only (Latin letters, digits, punctuation; no space),
+  with at least one upper case letter, one lower case letter, one digit and one punctuation character.
+  It is never stripped or otherwise changed. Every violated rule is reported in
+  `fieldErrors.password`, joined with `; ` (`org.example.user.PasswordPolicy`).
+* The password is stored as a BCrypt hash of cost 12 tagged with its algorithm
+  (`{bcrypt}$2a$12$...`, `org.example.security.PasswordEncoderConfig`).
+* **HTTP 409** `EMAIL_ALREADY_REGISTERED` with `"fieldErrors": {"email": "is already registered"}` if
+  an active user has the email. The address of a soft-deleted user (`users.deleted_at` set) may
+  register again, as a new user.
+* **HTTP 403** `REGISTRATION_DISABLED` if `droso.auth.registration-enabled` is `false`. The body is
+  validated first, so an invalid body still answers `400`.
+
 ### Error responses
 
 Every error of the API (except the `503` of the health endpoint above) has the same body:
@@ -156,7 +191,9 @@ Every error of the API (except the `503` of the health endpoint above) has the s
 |------|-----------------------|----------------------------------------------------------------------------------------|
 | 400  | `VALIDATION_ERROR`    | A Bean Validation constraint of the body or of a parameter is violated, a parameter is missing or has the wrong type, a property of the body is unknown or has a value of the wrong type (e.g. an unknown enum value) |
 | 400  | `MALFORMED_REQUEST`   | The body cannot be read: invalid JSON, no body, a body that is not a JSON object |
+| 403  | `REGISTRATION_DISABLED` | A registration while `droso.auth.registration-enabled` is `false`                    |
 | 404  | `RESOURCE_NOT_FOUND`  | `ResourceNotFoundException` is thrown, or the URL is unknown                            |
+| 409  | `EMAIL_ALREADY_REGISTERED` | A registration with the email of an active user; `fieldErrors.email` is set        |
 | 500  | `INTERNAL_ERROR`      | Any unexpected exception                                                               |
 | other| name of the status    | Other errors of Spring MVC, e.g. `405 METHOD_NOT_ALLOWED`, `415 UNSUPPORTED_MEDIA_TYPE` |
 
@@ -181,6 +218,7 @@ Every error of the API (except the `503` of the health endpoint above) has the s
 | `DB_URL`                    | composed from `db-local.properties` | JDBC URL              |
 | `DB_USERNAME` / `DB_PASSWORD` | from `db-local.properties` | Credentials                      |
 | `SERVER_PORT`               | `8080`               | HTTP port                            |
+| `droso.auth.registration-enabled` (`DROSO_AUTH_REGISTRATION_ENABLED`) | `true` | Whether anyone may register (always as `USER`) |
 
 The schema is owned by the Flyway migrations (`src/main/resources/db/migration`). Hibernate never
 changes it (`spring.jpa.hibernate.ddl-auto: validate`): it only checks on start-up that the entities
@@ -385,6 +423,20 @@ curl -i http://localhost:8080/api/v1/defects/1
 `200` with the defect created above. `/api/v1/defects/999999` answers `404 RESOURCE_NOT_FOUND`,
 `/api/v1/defects/abc` and `/api/v1/defects/0x1` answer `400 VALIDATION_ERROR` with
 `fieldErrors.id`. The row in the database is unchanged by the GET.
+
+### Registering a user
+
+```bash
+curl -i -X POST http://localhost:8080/api/v1/auth/register   -H "Content-Type: application/json"   -d '{"email": "Qwe.Qwe+1@Gmail.com", "password": "Sup3r-Secret!"}'
+```
+
+`201` with `"email":"qwe.qwe+1@gmail.com"` and `"role":"USER"`. The same request again answers
+`409 EMAIL_ALREADY_REGISTERED`; `"password": "secret"` answers `400` with every violated rule in
+`fieldErrors.password`. The row holds the hash, never the password:
+
+```sql
+SELECT id, email, role_code, left(password_hash, 15), deleted_at, created_at, updated_at FROM users;
+```
 
 On Windows, `curl` does not pass a non-ASCII `-d` argument as UTF-8, so a Cyrillic title arrives as
 invalid UTF-8 and answers `400 MALFORMED_REQUEST`. Put such a body into a UTF-8 file and send it

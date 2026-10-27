@@ -7,9 +7,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
-import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.example.support.PostgresIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
@@ -22,8 +20,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -37,14 +33,11 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class DefectRetrievalHttpIntegrationTest {
-
+class DefectRetrievalHttpIntegrationTest extends PostgresIntegrationTest {
     private static final String NOT_FOUND =
             "{\"status\":404,\"code\":\"RESOURCE_NOT_FOUND\",\"message\":\"Resource not found\",\"fieldErrors\":{}}";
     private static final String INVALID_ID = "{\"status\":400,\"code\":\"VALIDATION_ERROR\","
             + "\"message\":\"Request validation failed\",\"fieldErrors\":{\"id\":\"has an invalid value\"}}";
-
-    private static EmbeddedPostgres postgres;
 
     private final HttpClient client = HttpClient.newHttpClient();
 
@@ -56,30 +49,6 @@ class DefectRetrievalHttpIntegrationTest {
 
     @Autowired
     private JsonMapper jsonMapper;
-
-    @BeforeAll
-    static void startPostgres() throws Exception {
-        postgres = EmbeddedPostgres.builder()
-                .setPort(0)
-                // The server inherits the OS locale on Windows and therefore answers in Russian.
-                // "C" keeps every server-side message in English.
-                .setServerConfig("lc_messages", "C")
-                .start();
-    }
-
-    @AfterAll
-    static void stopPostgres() throws Exception {
-        if (postgres != null) {
-            postgres.close();
-        }
-    }
-
-    @DynamicPropertySource
-    static void datasourceProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> postgres.getJdbcUrl("postgres", "postgres"));
-        registry.add("spring.datasource.username", () -> "postgres");
-        registry.add("spring.datasource.password", () -> "");
-    }
 
     /** The defect 26, so that an alias of its id would answer 200 instead of an error. */
     @BeforeEach
@@ -176,7 +145,7 @@ class DefectRetrievalHttpIntegrationTest {
     @Order(Integer.MAX_VALUE)
     @DisplayName("a GET while PostgreSQL is down answers 500 INTERNAL_ERROR without SQL or database details")
     void databaseDown() throws Exception {
-        postgres.close();
+        postgres().close();
 
         HttpResponse<String> response = get("26");
 

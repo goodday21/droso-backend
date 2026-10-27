@@ -8,10 +8,8 @@ import java.util.Map;
 
 import javax.sql.DataSource;
 
-import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
+import org.example.support.PostgresIntegrationTest;
 import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -20,44 +18,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * Verifies that the Flyway migrations are applied on start-up, both on a clean database and on top
  * of the baseline schema, and that the health probe does not depend on any migrated table.
  */
 @SpringBootTest
-class FlywayMigrationIntegrationTest {
-
-    private static EmbeddedPostgres postgres;
-
+class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
     @Autowired
     private DataSource dataSource;
-
-    @BeforeAll
-    static void startPostgres() throws Exception {
-        postgres = EmbeddedPostgres.builder()
-                .setPort(0)
-                // The server inherits the OS locale on Windows and therefore answers in Russian.
-                // "C" keeps every server-side message in English.
-                .setServerConfig("lc_messages", "C")
-                .start();
-    }
-
-    @AfterAll
-    static void stopPostgres() throws Exception {
-        if (postgres != null) {
-            postgres.close();
-        }
-    }
-
-    @DynamicPropertySource
-    static void datasourceProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> postgres.getJdbcUrl("postgres", "postgres"));
-        registry.add("spring.datasource.username", () -> "postgres");
-        registry.add("spring.datasource.password", () -> "");
-    }
 
     @Test
     @DisplayName("the baseline migration is applied")
@@ -147,8 +116,8 @@ class FlywayMigrationIntegrationTest {
     @Test
     @DisplayName("the defects migration is applied on top of an existing baseline schema and keeps its data")
     void upgradeFromBaseline() throws Exception {
-        new JdbcTemplate(postgres.getPostgresDatabase()).execute("CREATE DATABASE upgrade_path");
-        DataSource upgraded = postgres.getDatabase("postgres", "upgrade_path");
+        new JdbcTemplate(postgres().getPostgresDatabase()).execute("CREATE DATABASE upgrade_path");
+        DataSource upgraded = postgres().getDatabase("postgres", "upgrade_path");
         JdbcTemplate jdbc = new JdbcTemplate(upgraded);
 
         Flyway.configure().dataSource(upgraded).locations("classpath:db/migration").target("1").load().migrate();

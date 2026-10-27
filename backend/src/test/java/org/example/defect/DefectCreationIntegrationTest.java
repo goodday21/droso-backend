@@ -8,14 +8,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 import com.jayway.jsonpath.JsonPath;
-import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
+import org.example.support.PostgresIntegrationTest;
 import org.hamcrest.Matchers;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,8 +27,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.json.JsonMapper;
@@ -43,14 +40,11 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-class DefectCreationIntegrationTest {
-
+class DefectCreationIntegrationTest extends PostgresIntegrationTest {
     private static final String URL = "/api/v1/defects";
 
     /** One code point, two UTF-16 units. */
     private static final String EMOJI = "😀";
-
-    private static EmbeddedPostgres postgres;
 
     @Autowired
     private MockMvc mockMvc;
@@ -60,30 +54,6 @@ class DefectCreationIntegrationTest {
 
     @Autowired
     private JsonMapper jsonMapper;
-
-    @BeforeAll
-    static void startPostgres() throws Exception {
-        postgres = EmbeddedPostgres.builder()
-                .setPort(0)
-                // The server inherits the OS locale on Windows and therefore answers in Russian.
-                // "C" keeps every server-side message in English.
-                .setServerConfig("lc_messages", "C")
-                .start();
-    }
-
-    @AfterAll
-    static void stopPostgres() throws Exception {
-        if (postgres != null) {
-            postgres.close();
-        }
-    }
-
-    @DynamicPropertySource
-    static void datasourceProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> postgres.getJdbcUrl("postgres", "postgres"));
-        registry.add("spring.datasource.username", () -> "postgres");
-        registry.add("spring.datasource.password", () -> "");
-    }
 
     @BeforeEach
     void emptyTable() {
@@ -95,7 +65,9 @@ class DefectCreationIntegrationTest {
     @Test
     @DisplayName("a full request is stored and answered with 201, the stored defect and its Location")
     void createsFullDefect() throws Exception {
-        Instant before = Instant.now();
+        // createdAt is truncated to microseconds, the clock is not: an untruncated "before" may lie
+        // inside the same microsecond, after the stored value.
+        Instant before = Instant.now().truncatedTo(ChronoUnit.MICROS);
         String body = mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("""
                         {
                           "title": "Ошибка при сохранении профиля",

@@ -12,10 +12,8 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 
 import com.jayway.jsonpath.JsonPath;
-import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
+import org.example.support.PostgresIntegrationTest;
 import org.hamcrest.Matchers;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,8 +24,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.json.JsonMapper;
@@ -42,14 +38,11 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-class DefectRetrievalIntegrationTest {
-
+class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
     private static final String URL = "/api/v1/defects";
 
     /** ISO-8601 in UTC; {@code Instant} drops the trailing zero groups of the fraction. */
     private static final String ISO_INSTANT = "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3}|\\.\\d{6})?Z";
-
-    private static EmbeddedPostgres postgres;
 
     @Autowired
     private MockMvc mockMvc;
@@ -59,30 +52,6 @@ class DefectRetrievalIntegrationTest {
 
     @Autowired
     private JsonMapper jsonMapper;
-
-    @BeforeAll
-    static void startPostgres() throws Exception {
-        postgres = EmbeddedPostgres.builder()
-                .setPort(0)
-                // The server inherits the OS locale on Windows and therefore answers in Russian.
-                // "C" keeps every server-side message in English.
-                .setServerConfig("lc_messages", "C")
-                .start();
-    }
-
-    @AfterAll
-    static void stopPostgres() throws Exception {
-        if (postgres != null) {
-            postgres.close();
-        }
-    }
-
-    @DynamicPropertySource
-    static void datasourceProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> postgres.getJdbcUrl("postgres", "postgres"));
-        registry.add("spring.datasource.username", () -> "postgres");
-        registry.add("spring.datasource.password", () -> "");
-    }
 
     @BeforeEach
     void emptyTable() {

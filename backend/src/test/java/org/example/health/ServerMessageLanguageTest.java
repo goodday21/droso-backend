@@ -10,6 +10,7 @@ import java.sql.Statement;
 import java.util.Locale;
 
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
+import org.example.support.PostgresIntegrationTest;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -35,10 +36,8 @@ class ServerMessageLanguageTest {
         // also passes when it is started from the IDE.
         Locale.setDefault(Locale.ENGLISH);
 
-        postgres = EmbeddedPostgres.builder()
-                .setPort(0)
-                .setServerConfig("lc_messages", "C")
-                .start();
+        // The server of every database test: the test guards the configuration they all use.
+        postgres = PostgresIntegrationTest.startServer();
     }
 
     @AfterAll

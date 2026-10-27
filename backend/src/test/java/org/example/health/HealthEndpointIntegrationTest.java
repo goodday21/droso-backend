@@ -5,9 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.example.support.PostgresIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -16,8 +14,6 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
@@ -30,37 +26,9 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest
 @AutoConfigureMockMvc
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class HealthEndpointIntegrationTest {
-
-    private static EmbeddedPostgres postgres;
-
+class HealthEndpointIntegrationTest extends PostgresIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
-
-    @BeforeAll
-    static void startPostgres() throws Exception {
-        postgres = EmbeddedPostgres.builder()
-                .setPort(0)
-                .setRegisterShutdownHook(true)
-                // The server inherits the OS locale on Windows and therefore answers in Russian.
-                // "C" keeps every server-side message in English.
-                .setServerConfig("lc_messages", "C")
-                .start();
-    }
-
-    @AfterAll
-    static void stopPostgres() throws Exception {
-        if (postgres != null) {
-            postgres.close();
-        }
-    }
-
-    @DynamicPropertySource
-    static void datasourceProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> postgres.getJdbcUrl("postgres", "postgres"));
-        registry.add("spring.datasource.username", () -> "postgres");
-        registry.add("spring.datasource.password", () -> "");
-    }
 
     @Test
     @Order(1)
@@ -78,7 +46,7 @@ class HealthEndpointIntegrationTest {
     @Order(2)
     @DisplayName("answers 503 Service Unavailable after PostgreSQL has been stopped")
     void returnsServiceUnavailableWhenDatabaseIsDown() throws Exception {
-        postgres.close();
+        postgres().close();
 
         mockMvc.perform(get("/api/v1/health"))
                 .andExpect(status().isServiceUnavailable())

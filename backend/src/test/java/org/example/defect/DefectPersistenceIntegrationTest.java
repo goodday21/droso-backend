@@ -7,18 +7,14 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Map;
 
-import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceException;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.example.support.PostgresIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -29,10 +25,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * database and not from the persistence context of the write.
  */
 @SpringBootTest
-class DefectPersistenceIntegrationTest {
-
-    private static EmbeddedPostgres postgres;
-
+class DefectPersistenceIntegrationTest extends PostgresIntegrationTest {
     @Autowired
     private EntityManager entityManager;
 
@@ -41,30 +34,6 @@ class DefectPersistenceIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
-
-    @BeforeAll
-    static void startPostgres() throws Exception {
-        postgres = EmbeddedPostgres.builder()
-                .setPort(0)
-                // The server inherits the OS locale on Windows and therefore answers in Russian.
-                // "C" keeps every server-side message in English.
-                .setServerConfig("lc_messages", "C")
-                .start();
-    }
-
-    @AfterAll
-    static void stopPostgres() throws Exception {
-        if (postgres != null) {
-            postgres.close();
-        }
-    }
-
-    @DynamicPropertySource
-    static void datasourceProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> postgres.getJdbcUrl("postgres", "postgres"));
-        registry.add("spring.datasource.username", () -> "postgres");
-        registry.add("spring.datasource.password", () -> "");
-    }
 
     private Defect persist(Defect defect) {
         return transaction.execute(status -> {

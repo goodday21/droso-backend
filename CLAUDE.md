@@ -66,9 +66,12 @@ contract (followed by `droso-frontend`) and must not change.
 ## Tests
 
 - `./gradlew test` (CI runs exactly this); `./gradlew build --rerun-tasks` for a full local check.
-- Tests that need a database start their own PostgreSQL 14 with zonky `EmbeddedPostgres`
-  (`setPort(0)`, `setServerConfig("lc_messages", "C")`, `@DynamicPropertySource`); no Docker.
-  Copy the setup of `DefectPersistenceIntegrationTest` or `FlywayMigrationIntegrationTest`.
+- Spring tests that need a database extend `org.example.support.PostgresIntegrationTest`: one
+  zonky `EmbeddedPostgres` (PostgreSQL 14, free port, `lc_messages=C`, no Docker) per test class,
+  wired with `@DynamicPropertySource`; `postgres()` gives the server, e.g. to stop it. Its
+  `@DirtiesContext(AFTER_CLASS)` must stay: the inherited property source makes the context cache
+  key equal across subclasses, so a cached context would point to the stopped server of a previous
+  class. A test without Spring calls `PostgresIntegrationTest.startServer()`.
 - Web tests without a database use `@WebMvcTest`. A controller that exists only for a test is a
   `static` class nested in the test class and added with `@Import`: nested in a test class, it is
   ignored by the component scan of the other Spring Boot tests.

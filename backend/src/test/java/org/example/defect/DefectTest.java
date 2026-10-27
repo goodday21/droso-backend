@@ -60,6 +60,26 @@ class DefectTest {
     }
 
     @Test
+    @DisplayName("an optional field of invisible characters only is stored as null")
+    void blankOptionalFieldsAreNull() {
+        Defect defect = new Defect("Login fails", "", "  \n\t ", "  ", "​﻿", null);
+
+        assertThat(defect.getDescription()).isNull();
+        assertThat(defect.getStepsToReproduce()).isNull();
+        assertThat(defect.getExpectedResult()).isNull();
+        assertThat(defect.getActualResult()).isNull();
+    }
+
+    @Test
+    @DisplayName("an optional field with visible text is kept as given, its whitespace included")
+    void optionalFieldsAreNotTrimmed() {
+        Defect defect = new Defect("Login fails", " description\n", " steps", null, null, null);
+
+        assertThat(defect.getDescription()).isEqualTo(" description\n");
+        assertThat(defect.getStepsToReproduce()).isEqualTo(" steps");
+    }
+
+    @Test
     @DisplayName("the title is stored trimmed")
     void titleIsTrimmed() {
         assertThat(withTitle("  \tLogin fails \n").getTitle()).isEqualTo("Login fails");
@@ -78,6 +98,21 @@ class DefectTest {
     @DisplayName("the title is rejected when it is missing or shorter than 5 characters after trimming")
     void tooShortTitleIsRejected(String title) {
         assertThatIllegalArgumentException().isThrownBy(() -> withTitle(title));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"     ", "     ",
+            "     ", "​​​​​", "﻿﻿﻿﻿﻿",
+            "  abcd​​"})
+    @DisplayName("no-break and zero-width spaces are trimmed as well before the length is checked")
+    void invisibleCharactersDoNotCount(String title) {
+        assertThatIllegalArgumentException().isThrownBy(() -> withTitle(title));
+    }
+
+    @Test
+    @DisplayName("invisible characters are trimmed around the title only")
+    void invisibleCharactersAreTrimmedAroundTheTitle() {
+        assertThat(withTitle("﻿  Login fails ​").getTitle()).isEqualTo("Login fails");
     }
 
     @Test

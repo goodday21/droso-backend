@@ -24,8 +24,14 @@ import jakarta.persistence.Table;
 @Table(name = "defects")
 public class Defect {
 
-    static final int TITLE_MIN_LENGTH = 5;
-    static final int TITLE_MAX_LENGTH = 120;
+    // The limits of the text fields, in characters (code points), as in the VARCHAR columns.
+    // Public, so that the request DTOs validate the same limits instead of repeating the numbers.
+    public static final int TITLE_MIN_LENGTH = 5;
+    public static final int TITLE_MAX_LENGTH = 120;
+    public static final int DESCRIPTION_MAX_LENGTH = 2000;
+    public static final int STEPS_TO_REPRODUCE_MAX_LENGTH = 5000;
+    public static final int EXPECTED_RESULT_MAX_LENGTH = 2000;
+    public static final int ACTUAL_RESULT_MAX_LENGTH = 2000;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -34,16 +40,16 @@ public class Defect {
     @Column(name = "title", nullable = false, length = TITLE_MAX_LENGTH)
     private String title;
 
-    @Column(name = "description", length = 2000)
+    @Column(name = "description", length = DESCRIPTION_MAX_LENGTH)
     private String description;
 
-    @Column(name = "steps_to_reproduce", length = 5000)
+    @Column(name = "steps_to_reproduce", length = STEPS_TO_REPRODUCE_MAX_LENGTH)
     private String stepsToReproduce;
 
-    @Column(name = "expected_result", length = 2000)
+    @Column(name = "expected_result", length = EXPECTED_RESULT_MAX_LENGTH)
     private String expectedResult;
 
-    @Column(name = "actual_result", length = 2000)
+    @Column(name = "actual_result", length = ACTUAL_RESULT_MAX_LENGTH)
     private String actualResult;
 
     @Enumerated(EnumType.STRING)
@@ -65,21 +71,22 @@ public class Defect {
     }
 
     /**
-     * @param title            required; 5..120 characters after trimming, stored trimmed
-     * @param description      optional
-     * @param stepsToReproduce optional
-     * @param expectedResult   optional
-     * @param actualResult     optional
+     * @param title            required; 5..120 characters after trimming the invisible characters
+     *                         ({@link InvisibleText}), stored trimmed
+     * @param description      optional; {@code null} when invisible as a whole, otherwise kept as given
+     * @param stepsToReproduce optional; as {@code description}
+     * @param expectedResult   optional; as {@code description}
+     * @param actualResult     optional; as {@code description}
      * @param priority         optional; {@link DefectPriority#MEDIUM} when {@code null}
      * @throws IllegalArgumentException if the title violates its length rule
      */
     public Defect(String title, String description, String stepsToReproduce, String expectedResult,
             String actualResult, DefectPriority priority) {
         this.title = normalizeTitle(title);
-        this.description = description;
-        this.stepsToReproduce = stepsToReproduce;
-        this.expectedResult = expectedResult;
-        this.actualResult = actualResult;
+        this.description = InvisibleText.blankToNull(description);
+        this.stepsToReproduce = InvisibleText.blankToNull(stepsToReproduce);
+        this.expectedResult = InvisibleText.blankToNull(expectedResult);
+        this.actualResult = InvisibleText.blankToNull(actualResult);
         if (priority != null) {
             this.priority = priority;
         }
@@ -89,7 +96,7 @@ public class Defect {
         if (title == null) {
             throw new IllegalArgumentException("The title is required");
         }
-        String trimmed = title.strip();
+        String trimmed = InvisibleText.strip(title);
         // Code points rather than UTF-16 units, so that the rule counts characters the way the
         // VARCHAR(120) column does.
         int length = trimmed.codePointCount(0, trimmed.length());

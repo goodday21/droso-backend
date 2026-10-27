@@ -55,6 +55,64 @@ should not depend on the database.
 This section is the source of truth of the contract: the frontend model
 ([`health.model.ts`](https://github.com/goodday21/droso-frontend/blob/main/src/app/health/health.model.ts)) follows it.
 
+### Creating a defect
+
+`POST /api/v1/defects` with `Content-Type: application/json`:
+
+```json
+{
+  "title": "Profile changes are not saved",
+  "description": "The changes are lost after editing the profile",
+  "stepsToReproduce": "1. Open the profile\n2. Change the name\n3. Click Save",
+  "expectedResult": "The new name is saved",
+  "actualResult": "The old name is shown",
+  "priority": "HIGH"
+}
+```
+
+| Field              | Rule                                                                         |
+|--------------------|------------------------------------------------------------------------------|
+| `title`            | Required; 5..120 characters after stripping the surrounding invisible characters, stored stripped |
+| `description`      | Optional, at most 2000 characters                                            |
+| `stepsToReproduce` | Optional, at most 5000 characters                                            |
+| `expectedResult`   | Optional, at most 2000 characters                                            |
+| `actualResult`     | Optional, at most 2000 characters                                            |
+
+*Invisible* are the whitespace, the no-break spaces (U+00A0, U+2007, U+202F) and the other space
+separators, and the zero-width characters (U+200B, U+200C, U+200D, U+2060, U+FEFF, …): a title of
+five no-break spaces is blank. An optional field that is invisible as a whole is stored as `null`;
+any other is stored exactly as sent, its surrounding whitespace and line breaks included.
+| `priority`         | Optional: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL` (exact case); `MEDIUM` when absent or `null` |
+
+Lengths are counted in characters (Unicode code points), as by the `VARCHAR` columns: an emoji is
+one character.
+
+**HTTP 201** with the header `Location: /api/v1/defects/{id}` (relative) and the stored defect:
+
+```json
+{
+  "id": 1,
+  "title": "Profile changes are not saved",
+  "description": "The changes are lost after editing the profile",
+  "stepsToReproduce": "1. Open the profile\n2. Change the name\n3. Click Save",
+  "expectedResult": "The new name is saved",
+  "actualResult": "The old name is shown",
+  "priority": "HIGH",
+  "status": "NEW",
+  "createdAt": "2026-10-27T09:15:30.123456Z",
+  "updatedAt": "2026-10-27T09:15:30.123456Z"
+}
+```
+
+Every field of the response is always present (`null` when not set). `id`, `status` (always `NEW`),
+`createdAt` and `updatedAt` (equal for a new defect) are chosen by the server.
+
+**Unknown properties are rejected**, including `id`, `status`, `createdAt` and `updatedAt`:
+`400 VALIDATION_ERROR` with `"fieldErrors": {"status": "is not allowed"}`. A client that sends them
+must not believe it has set them, and a misspelt `"priorty"` must not silently fall back to `MEDIUM`.
+Only the first unknown property is reported. An enum is not read from its index either
+(`"priority": 2` is rejected).
+
 ### Error responses
 
 Every error of the API (except the `503` of the health endpoint above) has the same body:
@@ -70,8 +128,8 @@ Every error of the API (except the `503` of the health endpoint above) has the s
 
 | HTTP | `code`                | When                                                                                   |
 |------|-----------------------|----------------------------------------------------------------------------------------|
-| 400  | `VALIDATION_ERROR`    | A Bean Validation constraint of the body or of a parameter is violated, a parameter is missing or has the wrong type |
-| 400  | `MALFORMED_REQUEST`   | The body cannot be read: invalid JSON, a value of the wrong type, an unknown enum value, no body |
+| 400  | `VALIDATION_ERROR`    | A Bean Validation constraint of the body or of a parameter is violated, a parameter is missing or has the wrong type, a property of the body is unknown or has a value of the wrong type (e.g. an unknown enum value) |
+| 400  | `MALFORMED_REQUEST`   | The body cannot be read: invalid JSON, no body, a body that is not a JSON object |
 | 404  | `RESOURCE_NOT_FOUND`  | `ResourceNotFoundException` is thrown, or the URL is unknown                            |
 | 500  | `INTERNAL_ERROR`      | Any unexpected exception                                                               |
 | other| name of the status    | Other errors of Spring MVC, e.g. `405 METHOD_NOT_ALLOWED`, `415 UNSUPPORTED_MEDIA_TYPE` |
@@ -82,7 +140,8 @@ Every error of the API (except the `503` of the health endpoint above) has the s
 * `fieldErrors` is always present, empty unless the request failed validation. The keys are the
   names of the fields or parameters, sorted; several errors of one field are joined with `; `.
   The messages are the ones of the constraints, always in English (`spring.web.locale-resolver:
-  fixed`); a failed conversion is reported as `has an invalid value`, never with Java types.
+  fixed`); a failed conversion is reported as `has an invalid value`, never with Java types or the
+  rejected value, and an unknown property of the body as `is not allowed`.
 * The handler is `org.example.web.error.ApiExceptionHandler`. It covers the requests that reach
   Spring MVC; an error raised before (for instance by Tomcat for an invalid URL) gets the default
   body of Spring Boot, without message or stack trace.
@@ -273,6 +332,28 @@ curl -i http://localhost:8080/api/v1/health
 
 `200` with `{"status":"UP",...}` while PostgreSQL runs, `503` with `{"status":"DOWN",...}` after it is
 stopped. The body never contains the JDBC URL, the exception type or a stack trace.
+
+### Creating a defect
+
+```bash
+curl -i -X POST http://localhost:8080/api/v1/defects   -H "Content-Type: application/json"   -d '{"title": "Login fails", "priority": "HIGH"}'
+```
+
+`201` with `Location: /api/v1/defects/1` and the defect with `"status":"NEW"`. The row is in the
+database (`psql -h localhost -U <POSTGRES_USER> <POSTGRES_DB>`, see `db-local.properties`):
+
+```sql
+SELECT id, title, priority, status, created_at, updated_at FROM defects;
+```
+
+`'{"title": "   "}'` answers `400 VALIDATION_ERROR` with `fieldErrors.title`, `'{"title": "Login
+fails", "status": "CLOSED"}'` answers `400` with `"status": "is not allowed"`, `'{"title": '`
+answers `400 MALFORMED_REQUEST`. `GET /api/v1/defects/{id}` does not exist yet, so the `Location`
+answers `404` for now.
+
+On Windows, `curl` does not pass a non-ASCII `-d` argument as UTF-8, so a Cyrillic title arrives as
+invalid UTF-8 and answers `400 MALFORMED_REQUEST`. Put such a body into a UTF-8 file and send it
+with `--data-binary @defect.json`.
 
 To check the endpoint through the UI, including the *DOWN* and *not reachable* states, see
 [the walkthrough of droso-frontend](https://github.com/goodday21/droso-frontend#manual-walkthrough).

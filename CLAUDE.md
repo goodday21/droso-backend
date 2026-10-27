@@ -10,7 +10,8 @@ Guidance for Claude Code in this repository. The user-facing documentation is
 - The Angular frontend lives in its own repository, `droso-frontend` (cloned next to this one).
 - Packages under `org.example`:
   - `health` — `GET /api/v1/health` (200 UP / 503 DOWN, runs `SELECT 1`, touches no table).
-  - `defect` — JPA entity `Defect` with `DefectPriority` and `DefectStatus`. No REST API yet.
+  - `defect` — JPA entity `Defect` with `DefectPriority` and `DefectStatus`, `DefectRepository`,
+    `DefectService`, `DefectController` (`POST /api/v1/defects` only); DTOs in `defect.model`.
   - `web.error` — `ApiExceptionHandler`, `ApiError`, `ErrorCode`, `ResourceNotFoundException`.
 - `src/test/java/org/example/tools` holds the local database launcher (`PostgresLauncher`,
   `LocalDatabaseConfig`); it is not test code, it lives there to use the test dependencies.
@@ -36,8 +37,12 @@ PostgreSQL. Spring Boot 4 differs from 3 in ways that are easy to get wrong:
 - Enums are stored as `VARCHAR` by name with a `CHECK` constraint listing the values: a new enum
   value needs a migration replacing the constraint. Timestamps are `TIMESTAMPTZ` mapped to `Instant`.
 - `Defect`: the title is stripped and must be 5..120 code points (`IllegalArgumentException`
-  otherwise); priority defaults to `MEDIUM`; status is always `NEW`; `@PrePersist` sets
+  otherwise); an optional text that is invisible as a whole is stored as `null`, any other is kept
+  as given; priority defaults to `MEDIUM`; status is always `NEW`; `@PrePersist` sets
   `createdAt == updatedAt`, truncated to microseconds. No setters, no `@PreUpdate` yet.
+- "Stripped" and "blank" mean `InvisibleText`, never `String.strip()`/`isBlank()` alone: those miss
+  the no-break spaces (U+00A0, U+2007, U+202F) and the zero-width characters. The DTO normalizes
+  the same way before validation, so that the rules apply to the stored values.
 - The local database of `./gradlew runPostgres` lives in `backend/.postgres/data` (ignored by Git).
   It used to be `build/postgres-data`: if that directory still exists, `./gradlew clean` deletes a
   developer's database. For a full rebuild prefer `./gradlew build --rerun-tasks`.
@@ -48,8 +53,11 @@ Every API error is an `ApiError`: `{status, code, message, fieldErrors}`. `field
 present (`{}` when empty), sorted, several errors of one field joined with `; `. Codes:
 `VALIDATION_ERROR` (400), `MALFORMED_REQUEST` (400), `RESOURCE_NOT_FOUND` (404),
 `INTERNAL_ERROR` (500), otherwise the name of the HTTP status (`METHOD_NOT_ALLOWED`, …).
-Messages are fixed per code: never put the text of an exception into a response. Throw
-`ResourceNotFoundException` for a missing resource. The health 200/503 bodies are a separate
+Messages are fixed per code: never put the text of an exception into a response. Unknown JSON
+properties and enum indexes are rejected (`spring.jackson.*` in `application.yml`); a Jackson error
+with a property path is a `VALIDATION_ERROR` of that property, other unreadable bodies are
+`MALFORMED_REQUEST`. Text lengths are validated with `@CodePointLength` (as `VARCHAR` counts them),
+not `@Size`. Throw `ResourceNotFoundException` for a missing resource. The health 200/503 bodies are a separate
 contract (followed by `droso-frontend`) and must not change.
 
 ## Tests

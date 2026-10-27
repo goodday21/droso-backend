@@ -12,6 +12,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import org.example.text.InvisibleText;
 
 /**
  * A defect reported by a user. The table is created by the migration {@code V2__create_defects.sql}.

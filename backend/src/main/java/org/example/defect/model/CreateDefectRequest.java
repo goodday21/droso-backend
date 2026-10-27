@@ -9,7 +9,7 @@ import static org.example.defect.Defect.TITLE_MIN_LENGTH;
 
 import jakarta.validation.constraints.NotBlank;
 import org.example.defect.DefectPriority;
-import org.example.defect.InvisibleText;
+import org.example.text.InvisibleText;
 import org.hibernate.validator.constraints.CodePointLength;
 
 /**

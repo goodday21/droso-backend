@@ -23,6 +23,52 @@ actually returned a row.
 
 ## API contract
 
+### Authentication
+
+Every endpoint needs an access token, except these:
+
+| Endpoint                          | Why it is open                                            |
+|-----------------------------------|-----------------------------------------------------------|
+| `GET /api/v1/health`              | The public health contract                                |
+| `POST /api/v1/auth/register`      | Anyone may register (unless the registration is disabled) |
+| `POST /api/v1/auth/login`         | Issues the token                                          |
+| `GET /actuator/health`            | Probe of the platform, without details                    |
+
+The token is obtained with [`POST /api/v1/auth/login`](#logging-in) and sent in the header
+`Authorization: Bearer <accessToken>`, never in the URL (a query parameter `access_token` is
+ignored). The API is stateless: no session, no cookie, no CSRF token; HTTP Basic and form login
+are off.
+
+* **HTTP 401** `UNAUTHORIZED` without a token, or with a token that is invalid, expired, revoked or
+  of a deleted user, with `WWW-Authenticate: Bearer` (and `error="invalid_token"` when a token was
+  sent). The reason is not told.
+* **HTTP 403** `FORBIDDEN` with a valid token that is not enough. For now that is only the rest of
+  Actuator (`/actuator/metrics`, ...), which is closed to everyone until the deployment decides who
+  reads it; the permissions of the users come with TASK-008.
+* An unknown URL answers `401` without a token and `404` with one.
+
+The token is a JWT signed with HS256 and a server secret (`DROSO_JWT_SECRET`), valid for 30 minutes
+(`droso.jwt.access-token-ttl`). It is signed, not encrypted: its claims can be read by anyone who
+holds it, and carry nothing secret.
+
+| Claim   | Value                                                                        |
+|---------|------------------------------------------------------------------------------|
+| `sub`   | The id of the user (as a string), never the email                           |
+| `email` | The email, for the client                                                    |
+| `role`  | The role at the login, for the client only: the server uses the current one |
+| `iat` / `exp` | Issued at / expires at (seconds)                                     |
+| `iss`   | `droso-backend` (`droso.jwt.issuer`)                                         |
+| `jti`   | A random id of the token                                                    |
+| `ver`   | The token version of the user (`users.token_version`)                       |
+
+On every request the server checks the signature (HS256 only: `alg: none` and any other algorithm
+are rejected), `exp`/`nbf` with a leeway of 60 seconds, `iss`, and then loads the user by `sub`:
+a deleted user, or a `ver` that differs from `users.token_version`, is rejected at once although the
+token has not expired. Incrementing `token_version` therefore revokes every token of a user. The
+authorities come from the role in the database, not from the claim.
+
+### Health
+
 `GET /api/v1/health`
 
 **HTTP 200** — the database is reachable:
@@ -129,10 +175,11 @@ whitespace, at most `9223372036854775807`. So `abc`, `1.5`, `0`, `-1` are reject
 `026`, `+26`, `0x1A`, `%231A` (`#1A`) and `%2026`, which the default conversion of Spring would
 silently read as the defect 26 (`org.example.web.CanonicalIdEditor`).
 
-Two cases are decided by the servlet container, before this check:
+Two cases are decided before this check:
 
-* A path parameter is removed from the URL, as the Servlet specification provides:
-  `/api/v1/defects/26;x=1` is the defect 26.
+* A semicolon, plain or encoded (`/api/v1/defects/26;x=1`, `%3B26`), is rejected by the firewall
+  of Spring Security with `400 BAD_REQUEST`. Without it, the servlet container would remove
+  `;x=1` as a path parameter and answer the defect 26.
 * An encoded slash, backslash or NUL (`%2F`, `%5C`, `%00`) is rejected by Tomcat with `400` and its
   bare HTML error page, not with the body below.
 
@@ -174,6 +221,39 @@ password nor its hash is ever returned:
 * **HTTP 403** `REGISTRATION_DISABLED` if `droso.auth.registration-enabled` is `false`. The body is
   validated first, so an invalid body still answers `400`.
 
+### Logging in
+
+`POST /api/v1/auth/login` with `Content-Type: application/json`:
+
+```json
+{ "email": "qwe.qwe+1@gmail.com", "password": "Sup3r-Secret!" }
+```
+
+**HTTP 200** with `Cache-Control: no-store`:
+
+```json
+{ "accessToken": "eyJraWQiOi...", "tokenType": "Bearer", "expiresIn": 1800 }
+```
+
+* **email** is normalized like on the registration (`Qwe.Qwe+1@Gmail.com` logs in as well); the
+  **password** is compared exactly as given.
+* **HTTP 401** `INVALID_CREDENTIALS` if the email has no active user, the user is deleted, or the
+  password does not match. The three cases are indistinguishable, in the body and in the time:
+  an unknown email is still checked against a dummy BCrypt hash.
+* **HTTP 400** `VALIDATION_ERROR` only for a missing email or password, an email longer than 254 or
+  a password longer than 64 characters. The rules of a new password are not applied: a password
+  accepted by an older policy still logs in.
+* There is no refresh token yet (TASK-010): after `expiresIn` seconds the client logs in again.
+
+### The current user
+
+`GET /api/v1/auth/me` with a token answers **HTTP 200** with the user, as currently stored (the
+role may differ from the claim of the token):
+
+```json
+{ "id": 1, "email": "qwe.qwe+1@gmail.com", "role": "USER", "createdAt": "2026-10-27T10:15:30.123456Z" }
+```
+
 ### Error responses
 
 Every error of the API (except the `503` of the health endpoint above) has the same body:
@@ -191,6 +271,10 @@ Every error of the API (except the `503` of the health endpoint above) has the s
 |------|-----------------------|----------------------------------------------------------------------------------------|
 | 400  | `VALIDATION_ERROR`    | A Bean Validation constraint of the body or of a parameter is violated, a parameter is missing or has the wrong type, a property of the body is unknown or has a value of the wrong type (e.g. an unknown enum value) |
 | 400  | `MALFORMED_REQUEST`   | The body cannot be read: invalid JSON, no body, a body that is not a JSON object |
+| 400  | `BAD_REQUEST`         | The URL is rejected by the firewall of Spring Security (e.g. a `;`)                     |
+| 401  | `UNAUTHORIZED`        | No access token, or an invalid one ([Authentication](#authentication))                  |
+| 401  | `INVALID_CREDENTIALS` | A failed login                                                                         |
+| 403  | `FORBIDDEN`           | A valid token that is not enough                                                       |
 | 403  | `REGISTRATION_DISABLED` | A registration while `droso.auth.registration-enabled` is `false`                    |
 | 404  | `RESOURCE_NOT_FOUND`  | `ResourceNotFoundException` is thrown, or the URL is unknown                            |
 | 409  | `EMAIL_ALREADY_REGISTERED` | A registration with the email of an active user; `fieldErrors.email` is set        |
@@ -206,8 +290,10 @@ Every error of the API (except the `503` of the health endpoint above) has the s
   fixed`); a failed conversion is reported as `has an invalid value`, never with Java types or the
   rejected value, and an unknown property of the body as `is not allowed`.
 * The handler is `org.example.web.error.ApiExceptionHandler`. It covers the requests that reach
-  Spring MVC; an error raised before (for instance by Tomcat for an invalid URL) gets the default
-  body of Spring Boot, without message or stack trace.
+  Spring MVC. The errors of Spring Security, which runs before, are written in the same format by
+  `org.example.security` (`401`, `403`, the `400` of the firewall, and a `500 INTERNAL_ERROR` when
+  the database fails while a token is checked). An error raised by Tomcat itself (an invalid URL)
+  gets the default body of Spring Boot, without message or stack trace.
 
 ## Configuration
 
@@ -219,6 +305,20 @@ Every error of the API (except the `503` of the health endpoint above) has the s
 | `DB_USERNAME` / `DB_PASSWORD` | from `db-local.properties` | Credentials                      |
 | `SERVER_PORT`               | `8080`               | HTTP port                            |
 | `droso.auth.registration-enabled` (`DROSO_AUTH_REGISTRATION_ENABLED`) | `true` | Whether anyone may register (always as `USER`) |
+| `DROSO_JWT_SECRET` (`droso.jwt.secret`) | **none, required** | Secret of the access tokens: Base64 of at least 32 random bytes |
+| `droso.jwt.issuer`          | `droso-backend`      | Claim `iss` of the tokens            |
+| `droso.jwt.access-token-ttl` | `30m`               | Lifetime of an access token          |
+
+`DROSO_JWT_SECRET` has no default anywhere, on purpose: whoever knows the secret can forge a token
+of any user, so it must never be in the repository. The application does not start without it, or
+with a value that is not Base64 or shorter than 32 bytes, and the message says what to set.
+Generate one per environment and keep it out of Git:
+
+```bash
+openssl rand -base64 32
+```
+
+Changing the secret invalidates every issued token: all users have to log in again.
 
 The schema is owned by the Flyway migrations (`src/main/resources/db/migration`). Hibernate never
 changes it (`spring.jpa.hibernate.ddl-auto: validate`): it only checks on start-up that the entities
@@ -241,6 +341,17 @@ See [The database configuration](#the-database-configuration) for every property
 environment variables that override them.
 
 ## Running
+
+The service needs the secret of the access tokens in its environment (see
+[Configuration](#configuration)); set it once per terminal:
+
+```bash
+export DROSO_JWT_SECRET="$(openssl rand -base64 32)"      # bash
+$env:DROSO_JWT_SECRET = "<output of openssl rand -base64 32>"   # PowerShell
+```
+
+In IntelliJ IDEA, add it to the environment variables of the run configuration. A new secret on
+every start only means logging in again.
 
 ```bash
 ./gradlew bootRunWithPostgres   # start a local PostgreSQL, then the service (one command)
@@ -397,11 +508,39 @@ curl -i http://localhost:8080/api/v1/health
 `200` with `{"status":"UP",...}` while PostgreSQL runs, `503` with `{"status":"DOWN",...}` after it is
 stopped. The body never contains the JDBC URL, the exception type or a stack trace.
 
+### Registering and logging in
+
+```bash
+curl -i -X POST http://localhost:8080/api/v1/auth/register   -H "Content-Type: application/json"   -d '{"email": "Qwe.Qwe+1@Gmail.com", "password": "Sup3r-Secret!"}'
+curl -i -X POST http://localhost:8080/api/v1/auth/login   -H "Content-Type: application/json"   -d '{"email": "qwe.qwe+1@gmail.com", "password": "Sup3r-Secret!"}'
+```
+
+`201` with `"email":"qwe.qwe+1@gmail.com"` and `"role":"USER"`, then `200` with the token. Keep it
+for the requests below:
+
+```bash
+TOKEN=<accessToken of the response>
+curl -i http://localhost:8080/api/v1/auth/me -H "Authorization: Bearer $TOKEN"
+```
+
+The same registration again answers `409 EMAIL_ALREADY_REGISTERED`; `"password": "secret"` answers
+`400` with every violated rule in `fieldErrors.password`. A wrong password at the login answers
+`401 INVALID_CREDENTIALS`. The row holds the hash, never the password:
+
+```sql
+SELECT id, email, role_code, left(password_hash, 15), token_version, deleted_at, created_at, updated_at FROM users;
+```
+
+`UPDATE users SET token_version = token_version + 1` makes the next request with the token answer
+`401`; so does `deleted_at = now()`.
+
 ### Creating a defect
 
 ```bash
-curl -i -X POST http://localhost:8080/api/v1/defects   -H "Content-Type: application/json"   -d '{"title": "Login fails", "priority": "HIGH"}'
+curl -i -X POST http://localhost:8080/api/v1/defects   -H "Authorization: Bearer $TOKEN"   -H "Content-Type: application/json"   -d '{"title": "Login fails", "priority": "HIGH"}'
 ```
+
+Without the header it answers `401 UNAUTHORIZED` and stores nothing.
 
 `201` with `Location: /api/v1/defects/1` and the defect with `"status":"NEW"`. The row is in the
 database (`psql -h localhost -U <POSTGRES_USER> <POSTGRES_DB>`, see `db-local.properties`):
@@ -417,26 +556,12 @@ answers `400 MALFORMED_REQUEST`.
 ### Getting a defect
 
 ```bash
-curl -i http://localhost:8080/api/v1/defects/1
+curl -i http://localhost:8080/api/v1/defects/1 -H "Authorization: Bearer $TOKEN"
 ```
 
 `200` with the defect created above. `/api/v1/defects/999999` answers `404 RESOURCE_NOT_FOUND`,
 `/api/v1/defects/abc` and `/api/v1/defects/0x1` answer `400 VALIDATION_ERROR` with
 `fieldErrors.id`. The row in the database is unchanged by the GET.
-
-### Registering a user
-
-```bash
-curl -i -X POST http://localhost:8080/api/v1/auth/register   -H "Content-Type: application/json"   -d '{"email": "Qwe.Qwe+1@Gmail.com", "password": "Sup3r-Secret!"}'
-```
-
-`201` with `"email":"qwe.qwe+1@gmail.com"` and `"role":"USER"`. The same request again answers
-`409 EMAIL_ALREADY_REGISTERED`; `"password": "secret"` answers `400` with every violated rule in
-`fieldErrors.password`. The row holds the hash, never the password:
-
-```sql
-SELECT id, email, role_code, left(password_hash, 15), deleted_at, created_at, updated_at FROM users;
-```
 
 On Windows, `curl` does not pass a non-ASCII `-d` argument as UTF-8, so a Cyrillic title arrives as
 invalid UTF-8 and answers `400 MALFORMED_REQUEST`. Put such a body into a UTF-8 file and send it

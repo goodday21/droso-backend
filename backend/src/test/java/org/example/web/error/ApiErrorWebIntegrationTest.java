@@ -18,6 +18,7 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -27,6 +28,10 @@ import org.springframework.test.web.servlet.MockMvc;
  * database: the health service is replaced by a mock.
  */
 @WebMvcTest(controllers = HealthController.class)
+// Without the filters of Spring Security: this test is about the error handling of Spring MVC, and
+// the slice would apply the default security of Spring Boot, not SecurityConfig. The security of
+// the API is tested against the whole application (JwtAuthenticationIntegrationTest).
+@AutoConfigureMockMvc(addFilters = false)
 class ApiErrorWebIntegrationTest {
 
     @Autowired

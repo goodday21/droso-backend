@@ -16,10 +16,15 @@ Guidance for Claude Code in this repository. The user-facing documentation is
   - `user` — JPA entity `User` (table `users`), `Role` (`ADMIN`, `MANAGER`, `USER`; one per user),
     `UserRepository`, the rules `EmailAddress` and `PasswordPolicy`, their constraints
     `@ValidEmail`/`@ValidPassword` in `user.validation`; `UserResponse` in `user.model`.
-  - `auth` — `AuthController` (`POST /api/v1/auth/register`), `RegistrationService`,
-    `AuthProperties` (`droso.auth.*`); DTOs in `auth.model`.
-  - `security` — `PasswordEncoderConfig` (BCrypt cost 12 behind a `DelegatingPasswordEncoder`).
-    Only `spring-security-crypto` is on the classpath; the rest of Spring Security comes with the login.
+  - `auth` — `AuthController` (`POST /api/v1/auth/register`, `POST /api/v1/auth/login`,
+    `GET /api/v1/auth/me`), `RegistrationService`, `LoginService`, `AuthProperties` (`droso.auth.*`);
+    DTOs in `auth.model`.
+  - `security` — `PasswordEncoderConfig` (BCrypt cost 12 behind a `DelegatingPasswordEncoder`);
+    `SecurityConfig` (the filter chain), `JwtConfig` + `JwtProperties` (`droso.jwt.*`, HS256),
+    `AccessTokenService` (issues the tokens), `UserJwtAuthenticationConverter` (loads the user per
+    request; principal `AuthenticatedUser`), and the writers of `ApiError` outside Spring MVC
+    (`ApiAuthenticationEntryPoint`, `ApiAccessDeniedHandler`, `ApiAuthenticationFailureHandler`,
+    `ApiRequestRejectedHandler`).
   - `text` — `InvisibleText`.
   - `web` — `CanonicalIdEditor`: ids of URLs in canonical decimal form only (Spring's default
     conversion would read `0x1A`, `026`, `+26` as 26); register it with `@InitBinder` per controller.
@@ -54,6 +59,8 @@ PostgreSQL. Spring Boot 4 differs from 3 in ways that are easy to get wrong:
 - "Stripped" and "blank" mean `InvisibleText`, never `String.strip()`/`isBlank()` alone: those miss
   the no-break spaces (U+00A0, U+2007, U+202F) and the zero-width characters. The DTO normalizes
   the same way before validation, so that the rules apply to the stored values.
+- `users.token_version` (claim `ver`): incrementing it revokes every access token of the user; do
+  it on every change that must log the user out (deletion, password, role if needed).
 - `User`: the email is the login, stored stripped (`InvisibleText`) and lower-cased with
   `Locale.ROOT` (the column has a `CHECK` for it); the part after `+` is kept. The password is never
   normalized and never stored, logged or returned: only `password_hash` (`{bcrypt}$2a$12$...`), and
@@ -72,6 +79,8 @@ Every API error is an `ApiError`: `{status, code, message, fieldErrors}`. `field
 present (`{}` when empty), sorted, several errors of one field joined with `; `. Codes:
 `VALIDATION_ERROR` (400), `MALFORMED_REQUEST` (400), `REGISTRATION_DISABLED` (403),
 `RESOURCE_NOT_FOUND` (404), `EMAIL_ALREADY_REGISTERED` (409, with `fieldErrors.email`),
+`INVALID_CREDENTIALS` (401, failed login), `UNAUTHORIZED` (401, with `WWW-Authenticate: Bearer`),
+`FORBIDDEN` (403), `BAD_REQUEST` (400, a URL the firewall of Spring Security rejects, e.g. `;`),
 `INTERNAL_ERROR` (500), otherwise the name of the HTTP status (`METHOD_NOT_ALLOWED`, …).
 Messages are fixed per code: never put the text of an exception into a response. Unknown JSON
 properties and enum indexes are rejected (`spring.jackson.*` in `application.yml`); a Jackson error
@@ -79,6 +88,20 @@ with a property path is a `VALIDATION_ERROR` of that property, other unreadable 
 `MALFORMED_REQUEST`. Text lengths are validated with `@CodePointLength` (as `VARCHAR` counts them),
 not `@Size`. Throw `ResourceNotFoundException` for a missing resource. The health 200/503 bodies are a separate
 contract (followed by `droso-frontend`) and must not change.
+
+## Security
+
+- Every request needs `Authorization: Bearer <JWT>` except those listed in `SecurityConfig`
+  (`/api/v1/health`, `POST /api/v1/auth/register|login`, `/error`, `/actuator/health`); the rest of
+  Actuator is `denyAll`. A new public endpoint must be added there explicitly.
+- `DROSO_JWT_SECRET` (Base64, >= 32 bytes) is required; there is no default anywhere, and the
+  application refuses to start without it. Tests get `TestUsers.JWT_SECRET` from
+  `PostgresIntegrationTest`.
+- The filters run before Spring MVC: their errors never reach `ApiExceptionHandler`, they are
+  written by the handlers of `security` with `ApiErrorWriter`. An exception thrown while a token is
+  checked must be an `AuthenticationException`, or it escapes to Spring Boot's `/error`.
+- The claims `role`/`email` of a token are for the client only; the server reads the user from the
+  database on every request.
 
 ## Tests
 
@@ -89,9 +112,16 @@ contract (followed by `droso-frontend`) and must not change.
   `@DirtiesContext(AFTER_CLASS)` must stay: the inherited property source makes the context cache
   key equal across subclasses, so a cached context would point to the stopped server of a previous
   class. A test without Spring calls `PostgresIntegrationTest.startServer()`.
-- Web tests without a database use `@WebMvcTest`. A controller that exists only for a test is a
-  `static` class nested in the test class and added with `@Import`: nested in a test class, it is
-  ignored by the component scan of the other Spring Boot tests.
+- A test that calls a protected endpoint stores a user and sends a real token:
+  `TestUsers.create(users, Role.USER)` + `TestUsers.bearer(tokens, user)` (MockMvc:
+  `.with(TestUsers.authorization(bearer))`), not `jwt()` of spring-security-test, which skips the
+  decoder and the converter.
+- Web tests without a database use `@WebMvcTest`, with `@AutoConfigureMockMvc(addFilters = false)`:
+  the slice would apply Spring Boot's default security, not `SecurityConfig`. Do not make a
+  `Converter` a `@Component` in `security`: the slices pick up every `Converter` bean.
+- A controller that exists only for a test is a `static` class nested in the test class and added
+  with `@Import`: nested in a test class, it is ignored by the component scan of the other Spring
+  Boot tests.
 - The build forces English (`user.language=en`, `LC_ALL=C`) because the host is Russian; keep new
   launch configurations consistent with that.
 

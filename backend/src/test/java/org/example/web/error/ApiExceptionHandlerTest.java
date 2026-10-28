@@ -18,6 +18,7 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -40,6 +41,10 @@ import org.springframework.web.bind.annotation.RestController;
  * ignored by the component scan of the other Spring Boot tests and has to be imported explicitly.
  */
 @WebMvcTest(controllers = ApiExceptionHandlerTest.ProbeController.class)
+// Without the filters of Spring Security: this test is about the error handling of Spring MVC, and
+// the slice would apply the default security of Spring Boot, not SecurityConfig. The security of
+// the API is tested against the whole application (JwtAuthenticationIntegrationTest).
+@AutoConfigureMockMvc(addFilters = false)
 @Import(ApiExceptionHandlerTest.ProbeController.class)
 class ApiExceptionHandlerTest {
 

@@ -1,6 +1,7 @@
 package org.example.defect;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.example.support.TestUsers.authorization;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -12,7 +13,11 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 
 import com.jayway.jsonpath.JsonPath;
+import org.example.security.AccessTokenService;
 import org.example.support.PostgresIntegrationTest;
+import org.example.support.TestUsers;
+import org.example.user.Role;
+import org.example.user.UserRepository;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -53,9 +58,23 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
     @Autowired
     private JsonMapper jsonMapper;
 
+    @Autowired
+    private UserRepository users;
+
+    @Autowired
+    private AccessTokenService tokens;
+
+    /** The header Authorization of a user with the role USER. */
+    private String bearer;
+
     @BeforeEach
     void emptyTable() {
         jdbc.update("DELETE FROM defects");
+    }
+
+    @BeforeEach
+    void logIn() {
+        bearer = TestUsers.bearer(tokens, TestUsers.create(users, Role.USER));
     }
 
     // ---------------------------------------------------------------- existing defect
@@ -67,7 +86,7 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
                 "Saved", "Not saved 😀", "CRITICAL",
                 "2026-01-02T03:04:05.123456Z", "2026-03-04T05:06:07.654321Z");
 
-        mockMvc.perform(get(URL + "/{id}", id))
+        mockMvc.perform(get(URL + "/{id}", id).with(authorization(bearer)))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Content-Type", Matchers.startsWith(MediaType.APPLICATION_JSON_VALUE)))
                 .andExpect(jsonPath("$.id").value(id))
@@ -89,7 +108,7 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
         long id = insert("Crash on start", null, null, null, null, "MEDIUM",
                 "2026-01-02T03:04:05Z", "2026-01-02T03:04:05Z");
 
-        mockMvc.perform(get(URL + "/{id}", id))
+        mockMvc.perform(get(URL + "/{id}", id).with(authorization(bearer)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.description").value(Matchers.nullValue()))
                 .andExpect(jsonPath("$.stepsToReproduce").value(Matchers.nullValue()))
@@ -105,7 +124,7 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
         long id = insert("Crash on start", null, null, null, null, "LOW",
                 "2026-06-30T23:30:00.120+03:00", "2026-07-01T00:00:00.000001+03:00");
 
-        String body = body(mockMvc.perform(get(URL + "/{id}", id)).andExpect(status().isOk()));
+        String body = body(mockMvc.perform(get(URL + "/{id}", id).with(authorization(bearer))).andExpect(status().isOk()));
 
         assertThat((String) JsonPath.read(body, "$.createdAt")).matches(ISO_INSTANT).isEqualTo("2026-06-30T20:30:00.120Z");
         assertThat((String) JsonPath.read(body, "$.updatedAt")).matches(ISO_INSTANT).isEqualTo("2026-06-30T21:00:00.000001Z");
@@ -117,8 +136,8 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
         long first = insert("First defect", null, null, null, null, "LOW", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z");
         long second = insert("Second defect", null, null, null, null, "HIGH", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z");
 
-        mockMvc.perform(get(URL + "/{id}", first)).andExpect(jsonPath("$.title").value("First defect"));
-        mockMvc.perform(get(URL + "/{id}", second)).andExpect(jsonPath("$.title").value("Second defect"));
+        mockMvc.perform(get(URL + "/{id}", first).with(authorization(bearer))).andExpect(jsonPath("$.title").value("First defect"));
+        mockMvc.perform(get(URL + "/{id}", second).with(authorization(bearer))).andExpect(jsonPath("$.title").value("Second defect"));
     }
 
     // ---------------------------------------------------------------- POST, then GET
@@ -126,7 +145,7 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
     @Test
     @DisplayName("a defect created with POST is read back by a separate GET of its Location")
     void createdDefectIsReadBack() throws Exception {
-        ResultActions created = mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("""
+        ResultActions created = mockMvc.perform(post(URL).with(authorization(bearer)).contentType(MediaType.APPLICATION_JSON).content("""
                         {
                           "title": "  Login fails  ",
                           "description": "The button does nothing",
@@ -140,7 +159,7 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
         String location = created.andReturn().getResponse().getHeader("Location");
         String postBody = body(created);
 
-        String getBody = body(mockMvc.perform(get(location))
+        String getBody = body(mockMvc.perform(get(location).with(authorization(bearer)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title").value("Login fails"))
                 .andExpect(jsonPath("$.status").value("NEW")));
@@ -161,7 +180,7 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
         Map<String, Object> before = row(id);
 
         for (int i = 0; i < 3; i++) {
-            mockMvc.perform(get(URL + "/{id}", id)).andExpect(status().isOk());
+            mockMvc.perform(get(URL + "/{id}", id).with(authorization(bearer))).andExpect(status().isOk());
         }
 
         // xmin is the id of the transaction that wrote the row version: an UPDATE, even one that
@@ -176,7 +195,7 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
         long id = insert("Crash on start", null, null, null, null, "HIGH", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z");
         Map<String, Object> before = row(id);
 
-        mockMvc.perform(get(URL + "/{id}", id + 1)).andExpect(status().isNotFound());
+        mockMvc.perform(get(URL + "/{id}", id + 1).with(authorization(bearer))).andExpect(status().isNotFound());
 
         assertThat(count()).isEqualTo(1);
         assertThat(row(id)).isEqualTo(before);
@@ -188,7 +207,7 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
     @ValueSource(longs = {1, 424242, Long.MAX_VALUE})
     @DisplayName("a missing defect answers 404 RESOURCE_NOT_FOUND without naming the resource or the id")
     void missingDefect(long id) throws Exception {
-        String body = body(mockMvc.perform(get(URL + "/{id}", id))
+        String body = body(mockMvc.perform(get(URL + "/{id}", id).with(authorization(bearer)))
                 .andExpect(status().isNotFound())
                 .andExpect(header().string("Content-Type", Matchers.startsWith(MediaType.APPLICATION_JSON_VALUE)))
                 .andExpect(jsonPath("$.status").value(404))
@@ -208,7 +227,7 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
         long id = insert("Crash on start", null, null, null, null, "HIGH", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z");
         jdbc.update("DELETE FROM defects WHERE id = ?", id);
 
-        mockMvc.perform(get(URL + "/{id}", id))
+        mockMvc.perform(get(URL + "/{id}", id).with(authorization(bearer)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
     }
@@ -228,7 +247,7 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
         jdbc.update("INSERT INTO defects (id, title, priority, status, created_at, updated_at)"
                 + " VALUES (26, 'Crash on start', 'HIGH', 'NEW', now(), now())");
 
-        String body = body(mockMvc.perform(get(URL + "/{id}", id))
+        String body = body(mockMvc.perform(get(URL + "/{id}", id).with(authorization(bearer)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
@@ -246,7 +265,7 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
     @Test
     @DisplayName("the collection URL with a trailing slash answers 404 RESOURCE_NOT_FOUND")
     void trailingSlash() throws Exception {
-        mockMvc.perform(get(URL + "/"))
+        mockMvc.perform(get(URL + "/").with(authorization(bearer)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
     }
@@ -254,7 +273,7 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
     @Test
     @DisplayName("GET of the collection is not implemented and answers 405 METHOD_NOT_ALLOWED")
     void collectionIsNotReadable() throws Exception {
-        mockMvc.perform(get(URL))
+        mockMvc.perform(get(URL).with(authorization(bearer)))
                 .andExpect(status().isMethodNotAllowed())
                 .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"))
                 .andExpect(jsonPath("$.*", Matchers.hasSize(4)));

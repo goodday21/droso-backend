@@ -53,7 +53,7 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
         Integer failed = jdbc.queryForObject(
                 "SELECT count(*) FROM flyway_schema_history WHERE success = false", Integer.class);
 
-        assertThat(versions).contains("1", "2", "3", "4");
+        assertThat(versions).contains("1", "2", "3", "4", "5");
         assertThat(failed).isZero();
         assertThat(tableExists(jdbc, "demo_item")).isTrue();
         assertThat(tableExists(jdbc, "defects")).isTrue();
@@ -137,7 +137,7 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
         assertThat(jdbc.queryForList("SELECT name FROM demo_item", String.class)).containsExactly("kept");
         assertThat(jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success = true", String.class))
-                .contains("1", "2", "3", "4");
+                .contains("1", "2", "3", "4", "5");
     }
 
     @Test
@@ -206,7 +206,8 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
                 "role_code character varying 32 NO NO",
                 "deleted_at timestamp with time zone null YES NO",
                 "created_at timestamp with time zone null NO NO",
-                "updated_at timestamp with time zone null NO NO");
+                "updated_at timestamp with time zone null NO NO",
+                "token_version integer null NO NO");
     }
 
     @Test

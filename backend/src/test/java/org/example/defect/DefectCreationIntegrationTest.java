@@ -1,6 +1,7 @@
 package org.example.defect;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.example.support.TestUsers.authorization;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -13,7 +14,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import com.jayway.jsonpath.JsonPath;
+import org.example.security.AccessTokenService;
 import org.example.support.PostgresIntegrationTest;
+import org.example.support.TestUsers;
+import org.example.user.Role;
+import org.example.user.UserRepository;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -55,9 +60,23 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
     @Autowired
     private JsonMapper jsonMapper;
 
+    @Autowired
+    private UserRepository users;
+
+    @Autowired
+    private AccessTokenService tokens;
+
+    /** The header Authorization of a user with the role USER. */
+    private String bearer;
+
     @BeforeEach
     void emptyTable() {
         jdbc.update("DELETE FROM defects");
+    }
+
+    @BeforeEach
+    void logIn() {
+        bearer = TestUsers.bearer(tokens, TestUsers.create(users, Role.USER));
     }
 
     // ---------------------------------------------------------------- successful creation
@@ -68,7 +87,7 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
         // createdAt is truncated to microseconds, the clock is not: an untruncated "before" may lie
         // inside the same microsecond, after the stored value.
         Instant before = Instant.now().truncatedTo(ChronoUnit.MICROS);
-        String body = mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("""
+        String body = mockMvc.perform(post(URL).with(authorization(bearer)).contentType(MediaType.APPLICATION_JSON).content("""
                         {
                           "title": "Ошибка при сохранении профиля",
                           "description": "Изменения не сохраняются после редактирования профиля",
@@ -435,7 +454,7 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
     @Test
     @DisplayName("a body that is not JSON answers 415 UNSUPPORTED_MEDIA_TYPE")
     void notJson() throws Exception {
-        mockMvc.perform(post(URL).contentType(MediaType.TEXT_PLAIN).content("Crash on start"))
+        mockMvc.perform(post(URL).with(authorization(bearer)).contentType(MediaType.TEXT_PLAIN).content("Crash on start"))
                 .andExpect(status().isUnsupportedMediaType())
                 .andExpect(jsonPath("$.code").value("UNSUPPORTED_MEDIA_TYPE"));
 
@@ -465,7 +484,7 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
     }
 
     private ResultActions postJson(String content) throws Exception {
-        return mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(content));
+        return mockMvc.perform(post(URL).with(authorization(bearer)).contentType(MediaType.APPLICATION_JSON).content(content));
     }
 
     /** Asserts a 400 VALIDATION_ERROR with exactly one field error, and that nothing was stored. */

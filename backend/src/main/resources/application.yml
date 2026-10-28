@@ -67,6 +67,13 @@ droso:
     # Whether anyone may register with POST /api/v1/auth/register (always with the role USER).
     # A deployment without self-registered users sets DROSO_AUTH_REGISTRATION_ENABLED=false.
     registration-enabled: ${DROSO_AUTH_REGISTRATION_ENABLED:true}
+  # The access tokens (JWT, HS256). The secret has deliberately no entry here: it comes from the
+  # environment variable DROSO_JWT_SECRET only (Base64 of at least 32 random bytes, e.g.
+  # "openssl rand -base64 32"), and the application does not start without it.
+  jwt:
+    issuer: droso-backend
+    # 30 minutes until the refresh tokens arrive (TASK-010), then 15.
+    access-token-ttl: 30m
 
 # Parameters of the health probe.
 health:
@@ -78,6 +85,8 @@ management:
     web:
       exposure:
         # Actuator is used for metrics/logging only; the public health contract is /api/v1/health.
+        # Only /actuator/health is open; SecurityConfig denies every other endpoint to everyone until
+        # the deployment decides who reads the metrics (a management port or a permission).
         include: health,info,metrics,prometheus
   endpoint:
     health:

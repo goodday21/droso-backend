@@ -39,6 +39,13 @@ public class User {
     @Column(name = "role_code", nullable = false, length = 32)
     private Role role;
 
+    /**
+     * The version of the access tokens: a token is valid only while its claim {@code ver} equals
+     * it, so incrementing it revokes every token issued before. Starts at 0 ({@code V5}).
+     */
+    @Column(name = "token_version", nullable = false)
+    private int tokenVersion;
+
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
@@ -107,6 +114,20 @@ public class User {
 
     public Role getRole() {
         return role;
+    }
+
+    /** The stored hash, for the check of a login only; it never leaves the server. */
+    public String getPasswordHash() {
+        return passwordHash;
+    }
+
+    public int getTokenVersion() {
+        return tokenVersion;
+    }
+
+    /** Whether the user has not been deleted. */
+    public boolean isActive() {
+        return deletedAt == null;
     }
 
     public Instant getDeletedAt() {

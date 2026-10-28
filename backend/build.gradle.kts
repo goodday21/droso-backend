@@ -22,9 +22,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     // Bean Validation (Hibernate Validator) of the request bodies and parameters.
     implementation("org.springframework.boot:spring-boot-starter-validation")
-    // The password encoders (BCrypt) only. The rest of Spring Security comes with the login: until
-    // then it would answer every request of the API with 401.
-    implementation("org.springframework.security:spring-security-crypto")
+    // Spring Security with its OAuth2 resource server: the API is protected by bearer tokens (JWT,
+    // HS256), issued and verified with Nimbus. It brings spring-security-crypto (BCrypt) as well.
+    implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
 
     // Spring Boot 4 split the auto-configuration of Flyway into a dedicated module.
     implementation("org.springframework.boot:spring-boot-flyway")
@@ -35,6 +35,8 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     // Spring Boot 4 moved the MockMvc auto-configuration into a dedicated module.
     testImplementation("org.springframework.boot:spring-boot-webmvc-test")
+    // MockMvc integration of Spring Security (its filters in the MockMvc of the Spring Boot tests).
+    testImplementation("org.springframework.boot:spring-boot-starter-security-test")
     // Real PostgreSQL 14 started in-process: no Docker daemon required.
     testImplementation("io.zonky.test:embedded-postgres:2.2.2") {
         exclude(group = "org.flywaydb", module = "flyway-core")

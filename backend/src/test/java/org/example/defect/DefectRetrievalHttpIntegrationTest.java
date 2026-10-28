@@ -7,7 +7,11 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
+import org.example.security.AccessTokenService;
 import org.example.support.PostgresIntegrationTest;
+import org.example.support.TestUsers;
+import org.example.user.Role;
+import org.example.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
@@ -19,6 +23,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -50,9 +55,19 @@ class DefectRetrievalHttpIntegrationTest extends PostgresIntegrationTest {
     @Autowired
     private JsonMapper jsonMapper;
 
+    @Autowired
+    private UserRepository users;
+
+    @Autowired
+    private AccessTokenService tokens;
+
+    /** The header Authorization of a user with the role USER. */
+    private String bearer;
+
     /** The defect 26, so that an alias of its id would answer 200 instead of an error. */
     @BeforeEach
     void storeDefect26() {
+        bearer = TestUsers.bearer(tokens, TestUsers.create(users, Role.USER));
         jdbc.update("DELETE FROM defects");
         jdbc.update("INSERT INTO defects (id, title, priority, status, created_at, updated_at)"
                 + " VALUES (26, 'Crash on start', 'HIGH', 'NEW', '2026-01-02T03:04:05.123456Z', '2026-01-02T03:04:05.123456Z')");
@@ -84,10 +99,10 @@ class DefectRetrievalHttpIntegrationTest extends PostgresIntegrationTest {
         assertThat(jsonMapper.readTree(response.body())).isEqualTo(jsonMapper.readTree(NOT_FOUND));
     }
 
-    /** {@code %23} is "#", {@code %20} a space, {@code %3B} ";", {@code %E2%80%8B} a zero-width space. */
+    /** {@code %23} is "#", {@code %20} a space, {@code %E2%80%8B} a zero-width space. */
     @ParameterizedTest
     @Order(3)
-    @ValueSource(strings = {"abc", "0", "-1", "026", "+26", "0x1A", "%231A", "%2026", "26%20", "%3B26",
+    @ValueSource(strings = {"abc", "0", "-1", "026", "+26", "0x1A", "%231A", "%2026", "26%20",
             "%E2%80%8B26", "9223372036854775808"})
     @DisplayName("an id that is not canonical answers 400 VALIDATION_ERROR for id, also after decoding")
     void invalidId(String id) throws Exception {
@@ -109,19 +124,20 @@ class DefectRetrievalHttpIntegrationTest extends PostgresIntegrationTest {
     }
 
     /**
-     * Pins a known limitation: a path parameter ({@code ;name=value}, e.g. {@code ;jsessionid=})
-     * is removed from the URL before the mapping, as the Servlet specification provides, so the id
-     * is still the canonical {@code 26}.
+     * A path parameter ({@code ;name=value}, e.g. {@code ;jsessionid=}) would be removed from the URL
+     * before the mapping, as the Servlet specification provides, so {@code 26;x=1} would be the
+     * defect 26. The firewall of Spring Security rejects a semicolon, plain or encoded, before that.
      */
     @ParameterizedTest
     @Order(5)
-    @ValueSource(strings = {"26;x=1", "26;jsessionid=abc"})
-    @DisplayName("a path parameter after the id is ignored (Servlet behaviour)")
-    void pathParameterIsIgnored(String path) throws Exception {
+    @ValueSource(strings = {"26;x=1", "26;jsessionid=abc", "%3B26"})
+    @DisplayName("a semicolon in the path is rejected by the firewall with 400 BAD_REQUEST")
+    void semicolonIsRejected(String path) throws Exception {
         HttpResponse<String> response = get(path);
 
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains("\"id\":26");
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(jsonMapper.readTree(response.body())).isEqualTo(jsonMapper.readTree(
+                "{\"status\":400,\"code\":\"BAD_REQUEST\",\"message\":\"Bad Request\",\"fieldErrors\":{}}"));
     }
 
     /**
@@ -143,6 +159,10 @@ class DefectRetrievalHttpIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     @Order(Integer.MAX_VALUE)
+    /**
+     * The user of the token is loaded before the controller runs, so the failure happens in the
+     * filter chain; it is still answered as an {@code ApiError} (ApiAuthenticationFailureHandler).
+     */
     @DisplayName("a GET while PostgreSQL is down answers 500 INTERNAL_ERROR without SQL or database details")
     void databaseDown() throws Exception {
         postgres().close();
@@ -157,6 +177,7 @@ class DefectRetrievalHttpIntegrationTest extends PostgresIntegrationTest {
     private HttpResponse<String> get(String id) throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/api/v1/defects/" + id))
+                .header(HttpHeaders.AUTHORIZATION, bearer)
                 .GET()
                 .build();
         return client.send(request, HttpResponse.BodyHandlers.ofString());

@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import org.example.auth.EmailAlreadyRegisteredException;
+import org.example.auth.InvalidCredentialsException;
 import org.example.auth.RegistrationDisabledException;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -75,6 +76,16 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ApiError> handleRegistrationDisabled(RegistrationDisabledException e) {
         log.debug("Registration rejected: {}", e.getMessage());
         return respond(ApiError.of(ErrorCode.REGISTRATION_DISABLED));
+    }
+
+    /**
+     * Without {@code WWW-Authenticate}: the login is not a resource protected by a bearer token, and
+     * a challenge {@code Bearer} would suggest sending one.
+     */
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ApiError> handleInvalidCredentials(InvalidCredentialsException e) {
+        log.debug("Login rejected: {}", e.getMessage());
+        return respond(ApiError.of(ErrorCode.INVALID_CREDENTIALS));
     }
 
     @ExceptionHandler(Exception.class)

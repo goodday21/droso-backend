@@ -68,5 +68,8 @@ public abstract class PostgresIntegrationTest {
         registry.add("spring.datasource.url", () -> postgres.getJdbcUrl("postgres", "postgres"));
         registry.add("spring.datasource.username", () -> "postgres");
         registry.add("spring.datasource.password", () -> "");
+        // The application does not start without a secret of the access tokens; a test may forge
+        // tokens with it (TestUsers.JWT_SECRET).
+        registry.add("droso.jwt.secret", () -> TestUsers.JWT_SECRET);
     }
 }

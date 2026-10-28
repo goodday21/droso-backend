@@ -13,6 +13,8 @@ public enum ErrorCode {
 
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST, "Request validation failed"),
     MALFORMED_REQUEST(HttpStatus.BAD_REQUEST, "Malformed request body"),
+    /** A failed login: the email has no active user or the password does not match. */
+    INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "Invalid email or password"),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "Resource not found"),
     EMAIL_ALREADY_REGISTERED(HttpStatus.CONFLICT, "Email is already registered"),
     REGISTRATION_DISABLED(HttpStatus.FORBIDDEN, "Registration is disabled"),

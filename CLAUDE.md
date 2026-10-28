@@ -6,7 +6,8 @@ Guidance for Claude Code in this repository. The user-facing documentation is
 ## Layout
 
 - The Gradle project is `backend/`; run every command from there. The repository root holds only
-  `README.md`, `CLAUDE.md` and `.github/workflows/ci.yml`.
+  `README.md`, `CLAUDE.md`, `.github/workflows/ci.yml` and the project skills of Claude Code in
+  `.claude/skills/` (`start-task`: plan before any edit; `new-endpoint`: checklist of an endpoint).
 - The Angular frontend lives in its own repository, `droso-frontend` (cloned next to this one).
 - Packages under `org.example`:
   - `health` — `GET /api/v1/health` (200 UP / 503 DOWN, runs `SELECT 1`, touches no table).

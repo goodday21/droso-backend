@@ -7,7 +7,8 @@ Guidance for Claude Code in this repository. The user-facing documentation is
 
 - The Gradle project is `backend/`; run every command from there. The repository root holds only
   `README.md`, `CLAUDE.md`, `.github/workflows/ci.yml` and the project skills of Claude Code in
-  `.claude/skills/` (`start-task`: plan before any edit; `new-endpoint`: checklist of an endpoint).
+  `.claude/skills/` (`start-task`: plan before any edit; `new-endpoint`: checklist of an endpoint;
+  `test-pyramid`: mandatory checks and measurement whenever tests are added or changed).
 - The Angular frontend lives in its own repository, `droso-frontend` (cloned next to this one).
 - Packages under `org.example`:
   - `health` — `GET /api/v1/health` (200 UP / 503 DOWN, runs `SELECT 1`, touches no table).
@@ -109,6 +110,8 @@ contract (followed by `droso-frontend`) and must not change.
 ## Tests
 
 - `./gradlew test` (CI runs exactly this); `./gradlew build --rerun-tasks` for a full local check.
+- Adding or changing tests: follow the skill `test-pyramid` (lowest possible layer, no new Spring
+  context or isolated server without a reason, `pyramid.sh --run` before and after in the report).
 - Spring tests that need a database extend `org.example.support.PostgresIntegrationTest`: one
   zonky `EmbeddedPostgres` (PostgreSQL 14, free port, `lc_messages=C`, no Docker) shared by all
   test classes of the JVM, wired with `@DynamicPropertySource`, so that Spring's context cache

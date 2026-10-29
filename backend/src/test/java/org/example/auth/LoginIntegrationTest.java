@@ -39,8 +39,11 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * {@code POST /api/v1/auth/login} and {@code GET /api/v1/auth/me} through the whole application
  * against a real PostgreSQL server.
+ *
+ * <p>The registration is turned on explicitly: its default comes from the environment variable
+ * {@code DROSO_AUTH_REGISTRATION_ENABLED}, which a developer may have set to {@code false}.
  */
-@SpringBootTest
+@SpringBootTest(properties = "droso.auth.registration-enabled=true")
 @AutoConfigureMockMvc
 class LoginIntegrationTest extends PostgresIntegrationTest {
     private static final String LOGIN = "/api/v1/auth/login";

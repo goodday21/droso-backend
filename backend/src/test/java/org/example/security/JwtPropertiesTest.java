@@ -37,7 +37,12 @@ class JwtPropertiesTest {
     @Test
     @DisplayName("without any droso.jwt property the context fails, naming the environment variable")
     void missingSecretFailsStartUp() {
-        contextRunner.run(context -> {
+        // The real environment is replaced by an empty one: a developer who runs the application
+        // locally has DROSO_JWT_SECRET set, and the context would start with it.
+        contextRunner.withInitializer(context -> context.getEnvironment().getPropertySources().replace(
+                StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
+                new SystemEnvironmentPropertySource(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
+                        Map.of()))).run(context -> {
             assertThat(context).hasFailed();
             assertThat(context.getStartupFailure()).rootCause()
                     .hasMessageContaining("DROSO_JWT_SECRET")

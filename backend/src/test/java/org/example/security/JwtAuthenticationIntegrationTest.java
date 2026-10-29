@@ -43,8 +43,11 @@ import tools.jackson.databind.json.JsonMapper;
  * <p>The rejected tokens are forged by hand (header, claims and HMAC), so that every one differs from
  * a valid token in exactly one point: the algorithm, the key, a claim or the state of the user in
  * the database.
+ *
+ * <p>The registration is turned on explicitly: its default comes from the environment variable
+ * {@code DROSO_AUTH_REGISTRATION_ENABLED}, which a developer may have set to {@code false}.
  */
-@SpringBootTest
+@SpringBootTest(properties = "droso.auth.registration-enabled=true")
 @AutoConfigureMockMvc
 class JwtAuthenticationIntegrationTest extends PostgresIntegrationTest {
     /** Any protected endpoint; the defect does not exist, so an accepted token answers 404. */

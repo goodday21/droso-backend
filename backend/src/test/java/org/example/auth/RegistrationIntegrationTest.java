@@ -36,8 +36,11 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * <p>What was stored is read back with plain JDBC, independently of JPA and of the response. Every
  * rejected request is checked to leave the table empty.
+ *
+ * <p>The registration is turned on explicitly: its default comes from the environment variable
+ * {@code DROSO_AUTH_REGISTRATION_ENABLED}, which a developer may have set to {@code false}.
  */
-@SpringBootTest
+@SpringBootTest(properties = "droso.auth.registration-enabled=true")
 @AutoConfigureMockMvc
 class RegistrationIntegrationTest extends PostgresIntegrationTest {
     private static final String URL = "/api/v1/auth/register";

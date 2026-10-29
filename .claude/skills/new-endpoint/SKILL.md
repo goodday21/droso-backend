@@ -79,8 +79,9 @@ Write down, before the code (and in the plan of `start-task`):
 
 - An integration test class `<Resource><Action>IntegrationTest extends PostgresIntegrationTest`
   with `@SpringBootTest` + `@AutoConfigureMockMvc`
-  (`org.springframework.boot.webmvc.test.autoconfigure`). Do not remove its inherited
-  `@DirtiesContext`.
+  (`org.springframework.boot.webmvc.test.autoconfigure`). The tables are empty before every test
+  (no `DELETE FROM` by hand); a test that stops PostgreSQL goes into a separate class extending
+  `IsolatedPostgresIntegrationTest`.
 - A real token: `TestUsers.create(users, Role.USER)` + `TestUsers.bearer(tokens, user)`, sent with
   `.with(TestUsers.authorization(bearer))`. Not `jwt()` of spring-security-test.
 - Compare error bodies as whole JSON (`jsonMapper.readTree(...)`), as the existing tests do, so

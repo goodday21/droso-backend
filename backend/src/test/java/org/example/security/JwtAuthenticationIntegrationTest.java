@@ -80,7 +80,6 @@ class JwtAuthenticationIntegrationTest extends PostgresIntegrationTest {
 
     @BeforeEach
     void storeUser() {
-        jdbc.update("DELETE FROM users");
         user = TestUsers.create(users, Role.USER);
     }
 

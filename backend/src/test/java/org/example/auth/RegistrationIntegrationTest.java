@@ -58,11 +58,6 @@ class RegistrationIntegrationTest extends PostgresIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    @BeforeEach
-    void emptyTable() {
-        jdbc.update("DELETE FROM users");
-    }
-
     private ResultActions register(Object email, Object password) throws Exception {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("email", email);

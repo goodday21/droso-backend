@@ -7,7 +7,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
-import org.example.support.PostgresIntegrationTest;
+import org.example.support.IsolatedPostgresIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,7 +20,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
  * transmitted over the network, which is what an orchestrator or a load balancer observes.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class HealthEndpointHttpIntegrationTest extends PostgresIntegrationTest {
+class HealthEndpointHttpIntegrationTest extends IsolatedPostgresIntegrationTest {
     @LocalServerPort
     private int port;
 

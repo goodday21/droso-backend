@@ -110,11 +110,17 @@ contract (followed by `droso-frontend`) and must not change.
 
 - `./gradlew test` (CI runs exactly this); `./gradlew build --rerun-tasks` for a full local check.
 - Spring tests that need a database extend `org.example.support.PostgresIntegrationTest`: one
-  zonky `EmbeddedPostgres` (PostgreSQL 14, free port, `lc_messages=C`, no Docker) per test class,
-  wired with `@DynamicPropertySource`; `postgres()` gives the server, e.g. to stop it. Its
-  `@DirtiesContext(AFTER_CLASS)` must stay: the inherited property source makes the context cache
-  key equal across subclasses, so a cached context would point to the stopped server of a previous
-  class. A test without Spring calls `PostgresIntegrationTest.startServer()`.
+  zonky `EmbeddedPostgres` (PostgreSQL 14, free port, `lc_messages=C`, no Docker) shared by all
+  test classes of the JVM, wired with `@DynamicPropertySource`, so that Spring's context cache
+  reuses one application per configuration (keep the configurations few: every distinct
+  `@SpringBootTest(properties)`, web environment or `@MockitoBean` starts another context). Before
+  every test, all tables except `flyway_schema_history` and `roles` are truncated (`RESTART
+  IDENTITY`): do not rely on data of another test, and do not delete tables by hand.
+- Such a test must never stop the server. A test that does (e.g. 503/500 while PostgreSQL is down)
+  extends `IsolatedPostgresIntegrationTest`: a server and a context per class, with
+  `@DirtiesContext(AFTER_CLASS)`, which must stay there (the cached context would point to the
+  stopped server). Keep these classes few, each costs a server and a context (~3 s). A test
+  without Spring calls `PostgresIntegrationTest.startServer()`.
 - A test that calls a protected endpoint stores a user and sends a real token:
   `TestUsers.create(users, Role.USER)` + `TestUsers.bearer(tokens, user)` (MockMvc:
   `.with(TestUsers.authorization(bearer))`), not `jwt()` of spring-security-test, which skips the

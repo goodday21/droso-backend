@@ -68,11 +68,6 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
     private String bearer;
 
     @BeforeEach
-    void emptyTable() {
-        jdbc.update("DELETE FROM defects");
-    }
-
-    @BeforeEach
     void logIn() {
         bearer = TestUsers.bearer(tokens, TestUsers.create(users, Role.USER));
     }

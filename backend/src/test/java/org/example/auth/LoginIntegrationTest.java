@@ -69,7 +69,6 @@ class LoginIntegrationTest extends PostgresIntegrationTest {
 
     @BeforeEach
     void storeUser() {
-        jdbc.update("DELETE FROM users");
         user = TestUsers.create(users, EMAIL, Role.MANAGER);
     }
 

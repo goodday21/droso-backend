@@ -189,6 +189,9 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
     }
 
     // ---------------------------------------------------------------- title
+    //
+    // The rules of the title are pinned by CreateDefectRequestTest; here one case per kind of error
+    // checks how a violation reaches the client and that the stored value is the normalized one.
 
     @Test
     @DisplayName("the surrounding whitespace of the title is stripped before it is stored")
@@ -201,100 +204,16 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
                 .isEqualTo("Login fails");
     }
 
-    @ParameterizedTest
-    @ValueSource(ints = {5, 120})
-    @DisplayName("a title of 5 and of 120 characters is accepted")
-    void titleBoundsAreAccepted(int length) throws Exception {
-        create(Map.of("title", "a".repeat(length)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.title").value("a".repeat(length)));
-    }
-
     @Test
-    @DisplayName("a title of 120 characters surrounded by whitespace is accepted and stored stripped")
-    void maximalTitleWithWhitespaceIsAccepted() throws Exception {
-        String body = body(create(Map.of("title", "   " + "a".repeat(120) + "   "))
-                .andExpect(status().isCreated()));
-
-        assertThat(jdbc.queryForObject("SELECT title FROM defects WHERE id = ?", String.class, id(body)))
-                .isEqualTo("a".repeat(120));
-    }
-
-    @Test
-    @DisplayName("a title of 120 characters of two UTF-16 units each is accepted")
-    void maximalTitleCountsCodePoints() throws Exception {
-        create(Map.of("title", EMOJI.repeat(120)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.title").value(EMOJI.repeat(120)));
-    }
-
-    @Test
-    @DisplayName("a title of 4 characters of two UTF-16 units each is rejected")
-    void shortTitleCountsCodePoints() throws Exception {
-        rejected(Map.of("title", EMOJI.repeat(4)), "title", "length must be between 5 and 120");
-    }
-
-    @Test
-    @DisplayName("a missing or null title is rejected")
+    @DisplayName("a missing title is rejected")
     void missingTitleIsRejected() throws Exception {
         rejected(Map.of("description", "No title"), "title", "must not be blank");
-        rejected(fields("title", null), "title", "must not be blank");
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"", "   ", " \t\n "})
-    @DisplayName("an empty title or one of whitespace only is rejected")
-    void blankTitleIsRejected(String title) throws Exception {
-        rejected(Map.of("title", title), "title", "length must be between 5 and 120; must not be blank");
-    }
-
-    /**
-     * Characters that {@code String.strip()} keeps: the no-break spaces are not
-     * {@code Character.isWhitespace}, the zero-width ones are not even space characters.
-     */
-    @ParameterizedTest
-    @ValueSource(strings = {
-            "     ",   // NO-BREAK SPACE
-            "     ",   // FIGURE SPACE
-            "     ",   // NARROW NO-BREAK SPACE
-            "​​​​​",   // ZERO WIDTH SPACE
-            "⁠⁠⁠⁠⁠",   // WORD JOINER
-            "﻿﻿﻿﻿﻿",   // ZERO WIDTH NO-BREAK SPACE (BOM)
-            "　　　　　",   // IDEOGRAPHIC SPACE
-            "  \t​\n﻿  "})
-    @DisplayName("a title of invisible characters only, e.g. no-break or zero-width spaces, is rejected")
-    void invisibleTitleIsRejected(String title) throws Exception {
-        rejected(Map.of("title", title), "title", "length must be between 5 and 120; must not be blank");
     }
 
     @Test
-    @DisplayName("invisible characters around the title are stripped, the ones inside are kept")
-    void invisibleCharactersAroundTheTitleAreStripped() throws Exception {
-        String body = body(create(Map.of("title", "﻿  Login fails ​ "))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.title").value("Login fails")));
-
-        assertThat(jdbc.queryForObject("SELECT title FROM defects WHERE id = ?", String.class, id(body)))
-                .isEqualTo("Login fails");
-    }
-
-    @Test
-    @DisplayName("a title of 4 characters surrounded by invisible characters is rejected")
-    void shortTitleWithInvisibleCharactersIsRejected() throws Exception {
-        rejected(Map.of("title", "  abcd​​"), "title", "length must be between 5 and 120");
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"abcd", "  abcd  "})
-    @DisplayName("a title shorter than 5 characters after stripping is rejected")
-    void shortTitleIsRejected(String title) throws Exception {
-        rejected(Map.of("title", title), "title", "length must be between 5 and 120");
-    }
-
-    @Test
-    @DisplayName("a title longer than 120 characters is rejected")
-    void longTitleIsRejected() throws Exception {
-        rejected(Map.of("title", "a".repeat(121)), "title", "length must be between 5 and 120");
+    @DisplayName("a title of invisible characters reports both violated rules in one message, sorted")
+    void blankTitleIsRejected() throws Exception {
+        rejected(Map.of("title", "\u00A0 \u200B"), "title", "length must be between 5 and 120; must not be blank");
     }
 
     // ---------------------------------------------------------------- optional text fields
@@ -316,33 +235,15 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
                 .isEqualTo(value);
     }
 
-    @ParameterizedTest(name = "{0}: {1} characters")
-    @CsvSource({
-            "description,      2000",
-            "stepsToReproduce, 5000",
-            "expectedResult,   2000",
-            "actualResult,     2000"})
-    @DisplayName("an optional field longer than its maximum is rejected")
-    void optionalFieldTooLong(String field, int max) throws Exception {
-        rejected(Map.of("title", "Crash on start", field, "x".repeat(max + 1)),
-                field, "length must be between 0 and " + max);
-    }
+    @Test
+    @DisplayName("an optional field of invisible characters only is stored as null, however long")
+    void invisibleOptionalFieldIsNull() throws Exception {
+        String body = body(create(Map.of("title", "Crash on start", "description", " \u200B" + " ".repeat(6000)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.description").value(Matchers.nullValue())));
 
-    @ParameterizedTest(name = "{0}")
-    @ValueSource(strings = {"description", "stepsToReproduce", "expectedResult", "actualResult"})
-    @DisplayName("an optional field of invisible characters only is stored as null")
-    void invisibleOptionalFieldIsNull(String field) throws Exception {
-        // Blank however long: it is not stored, so its length does not matter.
-        for (String blank : new String[] {"", "  \t\n  ", " ​﻿ ", " ".repeat(6000)}) {
-            create(Map.of("title", "Crash on start", field, blank))
-                    .andExpect(status().isCreated())
-                    .andExpect(jsonPath("$." + field).value(Matchers.nullValue()));
-        }
-
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM defects", Long.class)).isEqualTo(4);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM defects WHERE description IS NOT NULL"
-                + " OR steps_to_reproduce IS NOT NULL OR expected_result IS NOT NULL OR actual_result IS NOT NULL",
-                Long.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT description FROM defects WHERE id = ?", String.class, id(body)))
+                .isNull();
     }
 
     @ParameterizedTest(name = "{0}")

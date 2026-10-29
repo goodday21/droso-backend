@@ -94,7 +94,9 @@ contract (followed by `droso-frontend`) and must not change.
 
 - Every request needs `Authorization: Bearer <JWT>` except those listed in `SecurityConfig`
   (`/api/v1/health`, `POST /api/v1/auth/register|login`, `/error`, `/actuator/health`); the rest of
-  Actuator is `denyAll`. A new public endpoint must be added there explicitly.
+  Actuator is `denyAll`. A new public endpoint must be added there explicitly, and to `PUBLIC` of
+  `EndpointAccessIntegrationTest`, which checks every mapped endpoint without a token (401 unless
+  listed there).
 - `DROSO_JWT_SECRET` (Base64, >= 32 bytes) is required; there is no default anywhere, and the
   application refuses to start without it. Tests get `TestUsers.JWT_SECRET` from
   `PostgresIntegrationTest`.

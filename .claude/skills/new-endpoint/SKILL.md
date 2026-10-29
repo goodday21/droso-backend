@@ -77,6 +77,9 @@ Write down, before the code (and in the plan of `start-task`):
 
 ## Tests
 
+- Put every case on the lowest layer that can check it and measure the pyramid: the `test-pyramid`
+  skill. The rules and normalization of the DTO go into a unit test with a `Validator`
+  (`CreateDefectRequestTest`); the integration test keeps one case per kind of error.
 - An integration test class `<Resource><Action>IntegrationTest extends PostgresIntegrationTest`
   with `@SpringBootTest` + `@AutoConfigureMockMvc`
   (`org.springframework.boot.webmvc.test.autoconfigure`). The tables are empty before every test

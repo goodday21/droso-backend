@@ -42,7 +42,9 @@ Keep the identifiers, paths and code in English. Sections, in this order:
 3. **Контракт API** (if the task has endpoints) — method and path, request and response bodies,
    every status with its `ErrorCode`, who may call it. Use the `new-endpoint` skill for the checklist.
 4. **Схема** (if any) — the next migration `V<n>__*.sql`, what it does to existing rows.
-5. **Тесты** — what each new test class pins, including the failure cases (401, 403, 400, 404, 409).
+5. **Тесты** — what each new test class pins, including the failure cases (401, 403, 400, 404, 409),
+   and its layer (unit / slice / db / api / http) by the checks of the `test-pyramid` skill; name
+   any new Spring context configuration or `IsolatedPostgresIntegrationTest` class with its reason.
 6. **Риски** — what may break: existing tests, the contract of `droso-frontend`, data of existing
    databases, behaviour of Spring Boot 4 that differs from 3.
 7. **Решения за тобой** — each as a numbered question with the options, a recommendation and its
@@ -59,9 +61,12 @@ Then stop and wait. Do not start "the uncontroversial part" before the approval.
 - Work in small stages; after each, run the tests of the touched package
   (`./gradlew test --tests 'org.example.<package>.*'`), at the end `./gradlew test`, and
   `./gradlew build --rerun-tasks` for a full check. Never `./gradlew clean`.
+- If the task touched `src/test`, follow the `test-pyramid` skill: its checks for every new test,
+  `pyramid.sh --run` on `main` before and on the branch after, and its thresholds for asking.
 - If something in the plan turns out wrong while implementing, stop and tell the user what and why
   before choosing another way.
 - Commit, push and open the PR only when the user asks.
 - The final report (in Russian) lists the changed files, the commands actually run with their
-  results, and the known limitations. A check that was not run (a real PostgreSQL, CI, the frontend)
+  results, the test pyramid before and after (if tests changed), and the known limitations. A
+  check that was not run (a real PostgreSQL, CI, the frontend)
   is reported as not run, never as passed.

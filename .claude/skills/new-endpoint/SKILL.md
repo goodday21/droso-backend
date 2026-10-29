@@ -67,7 +67,8 @@ Write down, before the code (and in the plan of `start-task`):
 
 - Every request is authenticated by default (`anyRequest().authenticated()`). A public endpoint
   must be added explicitly in `SecurityConfig`, with the method, and with a comment saying why it is
-  public; do the same in the table of the README section "Authentication".
+  public; do the same in the table of the README section "Authentication" and in `PUBLIC` of
+  `EndpointAccessIntegrationTest` (it fails for any endpoint that answers without a token unlisted).
 - Without a token: `401 UNAUTHORIZED` + `WWW-Authenticate: Bearer`; with a token that is not
   enough: `403 FORBIDDEN`. Both come from the existing handlers - do not answer them from the
   controller.

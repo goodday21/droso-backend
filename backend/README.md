@@ -77,7 +77,7 @@ permission is fixed in the code (`org.example.user.Role`), and the roles are nes
 | `DEFECT_READ`   |   ✓    |     ✓     |    ✓    | `GET /api/v1/defects/{id}`   |
 | `DEFECT_CREATE` |   ✓    |     ✓     |    ✓    | `POST /api/v1/defects`       |
 | `DEFECT_UPDATE` |        |     ✓     |    ✓    | (the editing of the defects, to come) |
-| `USER_MANAGE`   |        |           |    ✓    | (the administration of the users, to come) |
+| `USER_MANAGE`   |        |           |    ✓    | [`/api/v1/users`](#managing-users)  |
 
 A change of the role in the database applies to the next request, without a new token.
 [`GET /api/v1/auth/me`](#the-current-user) lists the permissions of the current user, so that a
@@ -290,6 +290,47 @@ that role, in a fixed order:
 
 The permissions are a hint for the interface; the server checks them on every request anyway.
 
+### Managing users
+
+Needs the permission `USER_MANAGE` (the role `ADMIN`); any other user gets `403 FORBIDDEN`. A
+deleted user is absent for every endpoint below (`404 RESOURCE_NOT_FOUND`). There is always at
+least one active administrator: demoting or deleting the last one answers **HTTP 409**
+`LAST_ADMIN` and changes nothing, also when two administrators demote or delete each other at the
+same moment (the server serializes such changes).
+
+**`GET /api/v1/users?page=0&size=20`** answers **HTTP 200** with a page of the active users, sorted
+by id:
+
+```json
+{
+  "items": [
+    { "id": 1, "email": "admin@example.com", "role": "ADMIN", "createdAt": "2026-10-30T09:00:00.123456Z" }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+`page` counts from 0 (default 0), `size` is 1..100 (default 20). A value outside answers
+`400 VALIDATION_ERROR` (e.g. `"fieldErrors": {"size": "must be less than or equal to 100"}`)
+rather than being cut silently; a page past the end has no items.
+
+**`PUT /api/v1/users/{id}/role`** with `{"role": "MANAGER"}` answers **HTTP 200** with the user
+(as in the list). The same role changes nothing. The user stays logged in: the permissions of the
+new role apply from the next request, while the claim `role` of their token keeps the old value
+until the next login (read the role from [`/me`](#the-current-user)). A missing role, an unknown
+one or another property answers `400 VALIDATION_ERROR`.
+
+**`DELETE /api/v1/users/{id}`** answers **HTTP 204** without a body. The user is soft-deleted
+(`deleted_at`): every token is revoked at once (`token_version` is incremented), the login fails
+with `401 INVALID_CREDENTIALS`, and the email may be registered again, as a new user with a new id.
+A deleted user cannot be restored. An administrator may demote or delete themselves while another
+active administrator exists.
+
+An id that is not canonical answers `400`, as for the defects.
+
 ### Error responses
 
 Every error of the API (except the `503` of the health endpoint above) has the same body:
@@ -314,6 +355,7 @@ Every error of the API (except the `503` of the health endpoint above) has the s
 | 403  | `REGISTRATION_DISABLED` | A registration while `droso.auth.registration-enabled` is `false`                    |
 | 404  | `RESOURCE_NOT_FOUND`  | `ResourceNotFoundException` is thrown, or the URL is unknown                            |
 | 409  | `EMAIL_ALREADY_REGISTERED` | A registration with the email of an active user; `fieldErrors.email` is set        |
+| 409  | `LAST_ADMIN`          | Demoting or deleting the last active administrator                                     |
 | 500  | `INTERNAL_ERROR`      | Any unexpected exception                                                               |
 | other| name of the status    | Other errors of Spring MVC, e.g. `405 METHOD_NOT_ALLOWED`, `415 UNSUPPORTED_MEDIA_TYPE` |
 
@@ -624,6 +666,22 @@ curl -i http://localhost:8080/api/v1/defects/1 -H "Authorization: Bearer $TOKEN"
 On Windows, `curl` does not pass a non-ASCII `-d` argument as UTF-8, so a Cyrillic title arrives as
 invalid UTF-8 and answers `400 MALFORMED_REQUEST`. Put such a body into a UTF-8 file and send it
 with `--data-binary @defect.json`.
+
+### Managing users
+
+With the token of an administrator (see the bootstrap above) in `$ADMIN_TOKEN`:
+
+```bash
+curl -i "http://localhost:8080/api/v1/users?size=10" -H "Authorization: Bearer $ADMIN_TOKEN"
+curl -i -X PUT http://localhost:8080/api/v1/users/2/role -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" -d '{"role": "MANAGER"}'
+curl -i -X DELETE http://localhost:8080/api/v1/users/2 -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+`200` with the page, `200` with `"role":"MANAGER"`, `204`. Afterwards the token of the user 2
+answers `401`, and the row has `deleted_at` set and `token_version` incremented. Demoting or
+deleting the only administrator answers `409 LAST_ADMIN`; the same requests with the token of a
+`USER` answer `403 FORBIDDEN`.
 
 To check the endpoint through the UI, including the *DOWN* and *not reachable* states, see
 [the walkthrough of droso-frontend](https://github.com/goodday21/droso-frontend#manual-walkthrough).

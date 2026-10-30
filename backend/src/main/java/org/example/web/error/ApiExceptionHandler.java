@@ -9,6 +9,7 @@ import java.util.TreeMap;
 import org.example.auth.EmailAlreadyRegisteredException;
 import org.example.auth.InvalidCredentialsException;
 import org.example.auth.RegistrationDisabledException;
+import org.example.user.LastAdminException;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -88,6 +89,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ApiError> handleInvalidCredentials(InvalidCredentialsException e) {
         log.debug("Login rejected: {}", e.getMessage());
         return respond(ApiError.of(ErrorCode.INVALID_CREDENTIALS));
+    }
+
+    @ExceptionHandler(LastAdminException.class)
+    public ResponseEntity<ApiError> handleLastAdmin(LastAdminException e) {
+        log.debug("Request rejected: {}", e.getMessage());
+        return respond(ApiError.of(ErrorCode.LAST_ADMIN));
     }
 
     /**

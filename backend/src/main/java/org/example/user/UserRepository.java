@@ -1,9 +1,15 @@
 package org.example.user;
 
+import java.util.List;
 import java.util.Optional;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
@@ -34,4 +40,22 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     /** Whether an active user has this role, e.g. whether there is an administrator at all. */
     boolean existsByRoleAndDeletedAtIsNull(Role role);
+
+    /** A page of the active users. */
+    Page<User> findByDeletedAtIsNull(Pageable pageable);
+
+    /**
+     * The active administrators, their rows locked until the end of the transaction
+     * ({@code SELECT ... FOR UPDATE}), always in the order of the id, so that two transactions lock
+     * them in the same order. A transaction that waits for the lock reads the rows again once it
+     * gets it: an administrator demoted or deleted meanwhile is no longer returned.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM User u WHERE u.role = org.example.user.Role.ADMIN AND u.deletedAt IS NULL ORDER BY u.id")
+    List<User> lockActiveAdmins();
+
+    /** The user with this id, deleted or not, its row locked until the end of the transaction. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM User u WHERE u.id = :id")
+    Optional<User> lockById(Long id);
 }

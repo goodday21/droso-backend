@@ -18,6 +18,8 @@ public enum ErrorCode {
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "Resource not found"),
     EMAIL_ALREADY_REGISTERED(HttpStatus.CONFLICT, "Email is already registered"),
     REGISTRATION_DISABLED(HttpStatus.FORBIDDEN, "Registration is disabled"),
+    /** Demoting or deleting the last active administrator. */
+    LAST_ADMIN(HttpStatus.CONFLICT, "The last administrator cannot be removed"),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
 
     private final HttpStatus status;

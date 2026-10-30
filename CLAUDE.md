@@ -20,7 +20,14 @@ Guidance for Claude Code in this repository. The user-facing documentation is
     `USER_MANAGE`), `UserRepository` (also `isEmailTaken` for the violation of
     `users_email_active_key`), the rules `EmailAddress` and `PasswordPolicy`, their constraints
     `@ValidEmail`/`@ValidPassword` in `user.validation`; `UserResponse`, `CurrentUserResponse`
-    (`/me`, with the permissions) in `user.model`.
+    (`/me`, with the permissions) in `user.model`. `UserController` + `UserManagementService`
+    (`USER_MANAGE`): `GET /api/v1/users` (page 0.., size 1..100), `PUT /api/v1/users/{id}/role`,
+    `DELETE /api/v1/users/{id}`; a deleted user is 404 everywhere; the last active admin cannot be
+    demoted or deleted (`LastAdminException` → 409 `LAST_ADMIN`). Every change locks the active
+    admins (`lockActiveAdmins`, ordered by id) and then the user row (`lockById`), in that order:
+    a count without locks lets two admins demote each other, and without the row lock a concurrent
+    role change would overwrite a deletion (Hibernate writes every column). `User.delete` bumps
+    `token_version` itself.
   - `auth` — `AuthController` (`POST /api/v1/auth/register`, `POST /api/v1/auth/login`,
     `GET /api/v1/auth/me`), `RegistrationService`, `LoginService`, `AuthProperties` (`droso.auth.*`);
     DTOs in `auth.model`.
@@ -88,6 +95,7 @@ Every API error is an `ApiError`: `{status, code, message, fieldErrors}`. `field
 present (`{}` when empty), sorted, several errors of one field joined with `; `. Codes:
 `VALIDATION_ERROR` (400), `MALFORMED_REQUEST` (400), `REGISTRATION_DISABLED` (403),
 `RESOURCE_NOT_FOUND` (404), `EMAIL_ALREADY_REGISTERED` (409, with `fieldErrors.email`),
+`LAST_ADMIN` (409),
 `INVALID_CREDENTIALS` (401, failed login), `UNAUTHORIZED` (401, with `WWW-Authenticate: Bearer`),
 `FORBIDDEN` (403), `BAD_REQUEST` (400, a URL the firewall of Spring Security rejects, e.g. `;`),
 `INTERNAL_ERROR` (500), otherwise the name of the HTTP status (`METHOD_NOT_ALLOWED`, …).

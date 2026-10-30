@@ -22,11 +22,13 @@ public class DefectService {
     /**
      * Creates a defect with the status {@link DefectStatus#NEW}. The request is expected to be
      * validated already; {@link Defect} still enforces the title rule on its own.
+     *
+     * @param authorId the id of the user who reports it, from the access token (never from the body)
      */
     @Transactional
-    public DefectResponse create(CreateDefectRequest request) {
+    public DefectResponse create(CreateDefectRequest request, long authorId) {
         Defect defect = new Defect(request.title(), request.description(), request.stepsToReproduce(),
-                request.expectedResult(), request.actualResult(), request.priority());
+                request.expectedResult(), request.actualResult(), request.priority(), authorId);
         // saveAndFlush: the INSERT runs here, so the id and the timestamps of the response are the
         // ones of the stored row, and a failure of the database surfaces inside this method.
         return DefectResponse.of(repository.saveAndFlush(defect));

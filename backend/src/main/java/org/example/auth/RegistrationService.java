@@ -16,9 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class RegistrationService {
 
-    /** The partial unique index on the email of the active users ({@code V3__create_users.sql}). */
-    static final String EMAIL_ACTIVE_KEY = "users_email_active_key";
-
     private final UserRepository repository;
     private final PasswordEncoder passwordEncoder;
     private final AuthProperties properties;
@@ -50,19 +47,10 @@ public class RegistrationService {
             // saveAndFlush: the INSERT runs here, so a duplicate surfaces inside this method.
             return UserResponse.of(repository.saveAndFlush(user));
         } catch (DataIntegrityViolationException e) {
-            if (violates(e, EMAIL_ACTIVE_KEY)) {
+            if (UserRepository.isEmailTaken(e)) {
                 throw new EmailAlreadyRegisteredException(e);
             }
             throw e;
         }
-    }
-
-    private static boolean violates(DataIntegrityViolationException e, String constraint) {
-        for (Throwable cause = e; cause != null; cause = cause.getCause()) {
-            if (cause instanceof org.hibernate.exception.ConstraintViolationException violation) {
-                return constraint.equalsIgnoreCase(violation.getConstraintName());
-            }
-        }
-        return false;
     }
 }

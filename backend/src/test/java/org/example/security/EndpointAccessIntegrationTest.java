@@ -6,12 +6,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
+import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import org.example.support.PostgresIntegrationTest;
+import org.example.user.Permission;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
@@ -23,9 +28,11 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
@@ -37,6 +44,10 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  * {@code SecurityConfig} that opens more than it should (e.g. {@code /api/v1/auth/**}, which would
  * open {@code /me} too) makes this test fail, and so does a new public endpoint that is not added to
  * {@link #PUBLIC} on purpose.
+ *
+ * <p>Beyond a token, every protected endpoint must require a {@link Permission} with
+ * {@code @PreAuthorize("hasAuthority('...')")}, except those in {@link #ANY_USER}: an endpoint that
+ * forgets it would be open to every role.
  *
  * <p>The endpoints of Actuator are mapped elsewhere; their access is checked by
  * {@link JwtAuthenticationIntegrationTest}.
@@ -54,6 +65,12 @@ class EndpointAccessIntegrationTest extends PostgresIntegrationTest {
             "POST /api/v1/auth/register",
             "POST /api/v1/auth/login",
             "GET /error");
+
+    /** The protected endpoints that any authenticated user may call, whatever the role. */
+    private static final Set<String> ANY_USER = Set.of("GET /api/v1/auth/me");
+
+    /** {@code hasAuthority('<PERMISSION>')}, the only form of check the API uses. */
+    private static final Pattern HAS_AUTHORITY = Pattern.compile("hasAuthority\\('([A-Z_]+)'\\)");
 
     @Autowired
     private MockMvc mockMvc;
@@ -112,12 +129,34 @@ class EndpointAccessIntegrationTest extends PostgresIntegrationTest {
                         send(endpoint).andReturn().getResponse().getStatus()).isNotEqualTo(401)));
     }
 
+    @TestFactory
+    @DisplayName("every protected endpoint outside ANY_USER requires an existing permission")
+    Stream<DynamicTest> permissions() {
+        Map<String, HandlerMethod> handlers = new TreeMap<>();
+        mappings.getHandlerMethods().forEach((info, handler) -> {
+            Set<RequestMethod> methods = info.getMethodsCondition().getMethods();
+            for (String pattern : info.getPatternValues()) {
+                methods.forEach(method -> handlers.put(method.name() + " " + pattern, handler));
+            }
+        });
+        return handlers.entrySet().stream()
+                .filter(entry -> !PUBLIC.contains(entry.getKey()) && !ANY_USER.contains(entry.getKey()))
+                .map(entry -> DynamicTest.dynamicTest(entry.getKey(), () -> {
+                    PreAuthorize check = entry.getValue().getMethodAnnotation(PreAuthorize.class);
+                    assertThat(check).as("@PreAuthorize of %s", entry.getKey()).isNotNull();
+                    Matcher matcher = HAS_AUTHORITY.matcher(check.value());
+                    assertThat(matcher.matches()).as("a single hasAuthority('...'): %s", check.value()).isTrue();
+                    assertThat(Permission.valueOf(matcher.group(1))).isNotNull();
+                }));
+    }
+
     @Test
     @DisplayName("the endpoints are found, and the public list names existing ones only")
     void endpointsAreFound() {
         // Without this, an empty scan or a renamed public endpoint would pass unnoticed.
         assertThat(endpoints())
                 .containsAll(PUBLIC)
+                .containsAll(ANY_USER)
                 .contains("GET /api/v1/auth/me", "POST /api/v1/defects", "GET /api/v1/defects/{id}");
     }
 }

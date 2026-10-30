@@ -13,16 +13,23 @@ Guidance for Claude Code in this repository. The user-facing documentation is
 - Packages under `org.example`:
   - `health` — `GET /api/v1/health` (200 UP / 503 DOWN, runs `SELECT 1`, touches no table).
   - `defect` — JPA entity `Defect` with `DefectPriority` and `DefectStatus`, `DefectRepository`,
-    `DefectService`, `DefectController` (`POST /api/v1/defects`, `GET /api/v1/defects/{id}`);
-    DTOs in `defect.model`.
-  - `user` — JPA entity `User` (table `users`), `Role` (`ADMIN`, `MANAGER`, `USER`; one per user),
-    `UserRepository`, the rules `EmailAddress` and `PasswordPolicy`, their constraints
-    `@ValidEmail`/`@ValidPassword` in `user.validation`; `UserResponse` in `user.model`.
+    `DefectService`, `DefectController` (`POST /api/v1/defects` needs `DEFECT_CREATE`,
+    `GET /api/v1/defects/{id}` needs `DEFECT_READ`); DTOs in `defect.model`.
+  - `user` — JPA entity `User` (table `users`), `Role` (`ADMIN`, `MANAGER`, `USER`; one per user)
+    with its `permissions()`, `Permission` (`DEFECT_READ`, `DEFECT_CREATE`, `DEFECT_UPDATE`,
+    `USER_MANAGE`), `UserRepository` (also `isEmailTaken` for the violation of
+    `users_email_active_key`), the rules `EmailAddress` and `PasswordPolicy`, their constraints
+    `@ValidEmail`/`@ValidPassword` in `user.validation`; `UserResponse`, `CurrentUserResponse`
+    (`/me`, with the permissions) in `user.model`.
   - `auth` — `AuthController` (`POST /api/v1/auth/register`, `POST /api/v1/auth/login`,
     `GET /api/v1/auth/me`), `RegistrationService`, `LoginService`, `AuthProperties` (`droso.auth.*`);
     DTOs in `auth.model`.
+  - `bootstrap` — `BootstrapAdminService`, run on start-up by `BootstrapAdminRunner`: creates an
+    `ADMIN` from `droso.bootstrap.admin.*` (`DROSO_BOOTSTRAP_ADMIN_EMAIL/PASSWORD`) when no active
+    one exists; a taken email or invalid settings stop the start-up.
   - `security` — `PasswordEncoderConfig` (BCrypt cost 12 behind a `DelegatingPasswordEncoder`);
-    `SecurityConfig` (the filter chain), `JwtConfig` + `JwtProperties` (`droso.jwt.*`, HS256),
+    `SecurityConfig` (the filter chain), `MethodSecurityConfig` (`@EnableMethodSecurity`),
+    `JwtConfig` + `JwtProperties` (`droso.jwt.*`, HS256),
     `AccessTokenService` (issues the tokens), `UserJwtAuthenticationConverter` (loads the user per
     request; principal `AuthenticatedUser`), and the writers of `ApiError` outside Spring MVC
     (`ApiAuthenticationEntryPoint`, `ApiAccessDeniedHandler`, `ApiAuthenticationFailureHandler`,
@@ -106,6 +113,12 @@ contract (followed by `droso-frontend`) and must not change.
   checked must be an `AuthenticationException`, or it escapes to Spring Boot's `/error`.
 - The claims `role`/`email` of a token are for the client only; the server reads the user from the
   database on every request.
+- Authorities are the `Permission`s of the current role (`Role.permissions()`), never `ROLE_*`. An
+  endpoint requires one with `@PreAuthorize("hasAuthority('<PERMISSION>')")`; a new role or a change
+  of the matrix happens in `Role` only. `EndpointAccessIntegrationTest` fails for a protected
+  endpoint without such a check, unless it is in its `ANY_USER` (open to every user, like `/me`).
+  A denied `@PreAuthorize` throws inside Spring MVC and is answered by `ApiExceptionHandler`
+  (`403 FORBIDDEN`), after the body has been validated.
 
 ## Tests
 
@@ -118,7 +131,8 @@ contract (followed by `droso-frontend`) and must not change.
   reuses one application per configuration (keep the configurations few: every distinct
   `@SpringBootTest(properties)`, web environment or `@MockitoBean` starts another context). Before
   every test, all tables except `flyway_schema_history` and `roles` are truncated (`RESTART
-  IDENTITY`): do not rely on data of another test, and do not delete tables by hand.
+  IDENTITY`): do not rely on data of another test, and do not delete tables by hand. It also clears
+  `droso.bootstrap.admin.*`, so no administrator is created on start-up.
 - Such a test must never stop the server. A test that does (e.g. 503/500 while PostgreSQL is down)
   extends `IsolatedPostgresIntegrationTest`: a server and a context per class, with
   `@DirtiesContext(AFTER_CLASS)`, which must stay there (the cached context would point to the

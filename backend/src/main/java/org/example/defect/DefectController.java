@@ -5,9 +5,13 @@ import java.net.URI;
 import jakarta.validation.Valid;
 import org.example.defect.model.CreateDefectRequest;
 import org.example.defect.model.DefectResponse;
+import org.example.security.AuthenticatedUser;
+import org.example.user.Permission;
 import org.example.web.CanonicalIdEditor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.InitBinder;
@@ -22,6 +26,10 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>Invalid requests are answered by {@code ApiExceptionHandler} with {@code 400 VALIDATION_ERROR}
  * or {@code 400 MALFORMED_REQUEST}, a missing defect with {@code 404 RESOURCE_NOT_FOUND}.
+ *
+ * <p>Every method needs a {@link Permission} of the user ({@code 403 FORBIDDEN} otherwise). The check
+ * runs when the method is called, i.e. after the body has been read and validated: an invalid body
+ * answers {@code 400} even to a user who lacks the permission.
  */
 @RestController
 @RequestMapping(DefectController.PATH)
@@ -45,21 +53,26 @@ public class DefectController {
     }
 
     /**
-     * Creates a defect and answers {@code 201 Created} with the stored defect.
+     * Creates a defect reported by the current user and answers {@code 201 Created} with the stored
+     * defect. Needs {@link Permission#DEFECT_CREATE}.
      *
      * <p>The {@code Location} is relative (RFC 9110 allows it): it stays correct behind a reverse
      * proxy, which an absolute URL built from the request would not without the forwarded headers.
      */
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<DefectResponse> create(@Valid @RequestBody CreateDefectRequest request) {
-        DefectResponse created = defectService.create(request);
+    @PreAuthorize("hasAuthority('DEFECT_CREATE')")
+    public ResponseEntity<DefectResponse> create(@Valid @RequestBody CreateDefectRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user) {
+        DefectResponse created = defectService.create(request, user.id());
         return ResponseEntity.created(URI.create(PATH + "/" + created.id())).body(created);
     }
 
     /**
      * Answers {@code 200 OK} with the stored defect, {@code 404 RESOURCE_NOT_FOUND} if there is none.
+     * Needs {@link Permission#DEFECT_READ}.
      */
     @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('DEFECT_READ')")
     public DefectResponse get(@PathVariable Long id) {
         return defectService.get(id);
     }

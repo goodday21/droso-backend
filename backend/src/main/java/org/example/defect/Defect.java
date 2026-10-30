@@ -61,6 +61,14 @@ public class Defect {
     @Column(name = "status", nullable = false, length = 16)
     private DefectStatus status = DefectStatus.NEW;
 
+    /**
+     * The id of the user who reported the defect; {@code null} for the defects created before the
+     * authors were recorded ({@code V6}). An id rather than a relation to {@code User}: the defect
+     * needs no more of the user, and a lazy relation would fail outside the transaction.
+     */
+    @Column(name = "created_by", updatable = false)
+    private Long createdBy;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -79,10 +87,11 @@ public class Defect {
      * @param expectedResult   optional; as {@code description}
      * @param actualResult     optional; as {@code description}
      * @param priority         optional; {@link DefectPriority#MEDIUM} when {@code null}
-     * @throws IllegalArgumentException if the title violates its length rule
+     * @param createdBy        required; the id of the user who reports the defect
+     * @throws IllegalArgumentException if the title violates its length rule or the author is missing
      */
     public Defect(String title, String description, String stepsToReproduce, String expectedResult,
-            String actualResult, DefectPriority priority) {
+            String actualResult, DefectPriority priority, Long createdBy) {
         this.title = normalizeTitle(title);
         this.description = InvisibleText.blankToNull(description);
         this.stepsToReproduce = InvisibleText.blankToNull(stepsToReproduce);
@@ -91,6 +100,10 @@ public class Defect {
         if (priority != null) {
             this.priority = priority;
         }
+        if (createdBy == null) {
+            throw new IllegalArgumentException("The author is required");
+        }
+        this.createdBy = createdBy;
     }
 
     private static String normalizeTitle(String title) {
@@ -149,6 +162,11 @@ public class Defect {
 
     public DefectStatus getStatus() {
         return status;
+    }
+
+    /** {@code null} only for a defect created before the authors were recorded. */
+    public Long getCreatedBy() {
+        return createdBy;
     }
 
     public Instant getCreatedAt() {

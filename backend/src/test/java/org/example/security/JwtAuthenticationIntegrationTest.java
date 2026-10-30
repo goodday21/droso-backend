@@ -22,6 +22,7 @@ import org.example.support.TestUsers;
 import org.example.user.Role;
 import org.example.user.User;
 import org.example.user.UserRepository;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -145,7 +146,7 @@ class JwtAuthenticationIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("the role comes from the database, not from the claim of the token")
+    @DisplayName("the role and its permissions come from the database, not from the claim of the token")
     void roleFromDatabase() throws Exception {
         Map<String, Object> claims = validClaims();
         claims.put("role", "ADMIN");
@@ -154,7 +155,8 @@ class JwtAuthenticationIntegrationTest extends PostgresIntegrationTest {
 
         mockMvc.perform(get(ME).with(authorization("Bearer " + token)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.role").value("MANAGER"));
+                .andExpect(jsonPath("$.role").value("MANAGER"))
+                .andExpect(jsonPath("$.permissions", Matchers.contains("DEFECT_READ", "DEFECT_CREATE", "DEFECT_UPDATE")));
     }
 
     @Test

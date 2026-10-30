@@ -18,6 +18,7 @@ import org.example.security.AccessTokenService;
 import org.example.support.PostgresIntegrationTest;
 import org.example.support.TestUsers;
 import org.example.user.Role;
+import org.example.user.User;
 import org.example.user.UserRepository;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,12 +67,17 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
     @Autowired
     private AccessTokenService tokens;
 
-    /** The header Authorization of a user with the role USER. */
+    /** The id of the user who sends the requests, a USER (who may report defects). */
+    private long author;
+
+    /** The header Authorization of that user. */
     private String bearer;
 
     @BeforeEach
     void logIn() {
-        bearer = TestUsers.bearer(tokens, TestUsers.create(users, Role.USER));
+        User user = TestUsers.create(users, Role.USER);
+        author = user.getId();
+        bearer = TestUsers.bearer(tokens, user);
     }
 
     // ---------------------------------------------------------------- successful creation
@@ -102,7 +108,8 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.actualResult").value("Отображается старое имя"))
                 .andExpect(jsonPath("$.priority").value("HIGH"))
                 .andExpect(jsonPath("$.status").value("NEW"))
-                .andExpect(jsonPath("$.*", Matchers.hasSize(10)))
+                .andExpect(jsonPath("$.createdBy").value(author))
+                .andExpect(jsonPath("$.*", Matchers.hasSize(11)))
                 .andReturn().getResponse().getContentAsString();
         Instant after = Instant.now();
 
@@ -120,6 +127,7 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
         assertThat(row.get("actual_result")).isEqualTo("Отображается старое имя");
         assertThat(row.get("priority")).isEqualTo("HIGH");
         assertThat(row.get("status")).isEqualTo("NEW");
+        assertThat(row.get("created_by")).isEqualTo(author);
         assertThat(timestamp("created_at", id)).isEqualTo(createdAt);
         assertThat(timestamp("updated_at", id)).isEqualTo(updatedAt);
     }
@@ -146,7 +154,8 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.stepsToReproduce").value(Matchers.nullValue()))
                 .andExpect(jsonPath("$.expectedResult").value(Matchers.nullValue()))
                 .andExpect(jsonPath("$.actualResult").value(Matchers.nullValue()))
-                .andExpect(jsonPath("$.*", Matchers.hasSize(10))));
+                .andExpect(jsonPath("$.createdBy").value(author))
+                .andExpect(jsonPath("$.*", Matchers.hasSize(11))));
 
         assertThat((String) JsonPath.read(body, "$.updatedAt")).isEqualTo(JsonPath.read(body, "$.createdAt"));
         Map<String, Object> row = jdbc.queryForMap("SELECT * FROM defects WHERE id = ?", id(body));

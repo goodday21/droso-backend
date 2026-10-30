@@ -5,6 +5,7 @@ import org.example.auth.model.LoginRequest;
 import org.example.auth.model.RegisterRequest;
 import org.example.auth.model.TokenResponse;
 import org.example.security.AuthenticatedUser;
+import org.example.user.model.CurrentUserResponse;
 import org.example.user.model.UserResponse;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
@@ -69,10 +70,11 @@ public class AuthController {
 
     /**
      * The user of the access token, as currently stored (the role may differ from the claim of the
-     * token).
+     * token), with the permissions of the role. Open to every authenticated user.
      */
     @GetMapping("/me")
-    public UserResponse me(@AuthenticationPrincipal AuthenticatedUser user) {
-        return new UserResponse(user.id(), user.email(), user.role(), user.createdAt());
+    public CurrentUserResponse me(@AuthenticationPrincipal AuthenticatedUser user) {
+        return new CurrentUserResponse(user.id(), user.email(), user.role(), user.role().permissions(),
+                user.createdAt());
     }
 }

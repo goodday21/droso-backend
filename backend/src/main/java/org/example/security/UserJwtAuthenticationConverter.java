@@ -3,6 +3,8 @@ package org.example.security;
 import java.util.List;
 import java.util.Optional;
 
+import org.example.user.Permission;
+import org.example.user.Role;
 import org.example.user.User;
 import org.example.user.UserRepository;
 import org.springframework.core.convert.converter.Converter;
@@ -21,7 +23,9 @@ import org.springframework.transaction.TransactionException;
  * <p>The token alone is not enough, because it is valid for its whole lifetime: the user is checked
  * on every request, so that a deleted user or a revoked token ({@code ver} lower than the
  * {@linkplain User#getTokenVersion() token version}) is rejected at once. The authorities come from
- * the current role in the database; the claim {@code role} is ignored.
+ * {@linkplain Role#permissions() permissions} of the current role in the database, one authority
+ * per {@link Permission} named like it; the claim {@code role} is ignored. The role itself is not an
+ * authority, so that no check can be written against a role instead of a permission.
  *
  * <p>A rejected token is an {@link InvalidBearerTokenException}: the filter answers it with
  * {@code 401}, like an invalid signature. The reason is not told to the client.
@@ -30,8 +34,6 @@ import org.springframework.transaction.TransactionException;
  * {@code Converter} bean, and this one would drag the repository into the slices.
  */
 public class UserJwtAuthenticationConverter implements Converter<Jwt, AbstractAuthenticationToken> {
-
-    static final String ROLE_PREFIX = "ROLE_";
 
     private final UserRepository repository;
 
@@ -47,8 +49,9 @@ public class UserJwtAuthenticationConverter implements Converter<Jwt, AbstractAu
         if (version(jwt) != user.getTokenVersion()) {
             throw new InvalidBearerTokenException("The token has been revoked");
         }
-        // Until the permissions arrive (TASK-008) the role is the only authority.
-        List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(ROLE_PREFIX + user.getRole().name()));
+        List<SimpleGrantedAuthority> authorities = user.getRole().permissions().stream()
+                .map(permission -> new SimpleGrantedAuthority(permission.name()))
+                .toList();
         return new UserAuthentication(AuthenticatedUser.of(user), jwt, authorities);
     }
 

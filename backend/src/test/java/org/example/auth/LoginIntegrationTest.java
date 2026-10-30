@@ -172,7 +172,7 @@ class LoginIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("/me answers the user of the token: id, email, role and creation time, nothing else")
+    @DisplayName("/me answers the user of the token: id, email, role, its permissions and creation time, nothing else")
     void me() throws Exception {
         String token = accessToken(login(EMAIL, TestUsers.PASSWORD));
 
@@ -181,8 +181,9 @@ class LoginIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.id").value(user.getId()))
                 .andExpect(jsonPath("$.email").value(EMAIL))
                 .andExpect(jsonPath("$.role").value("MANAGER"))
+                .andExpect(jsonPath("$.permissions", Matchers.contains("DEFECT_READ", "DEFECT_CREATE", "DEFECT_UPDATE")))
                 .andExpect(jsonPath("$.createdAt").isString())
-                .andExpect(jsonPath("$.*", Matchers.hasSize(4)));
+                .andExpect(jsonPath("$.*", Matchers.hasSize(5)));
     }
 
     // ---------------------------------------------------------------- failed login

@@ -15,9 +15,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.method.ParameterErrors;
 import org.springframework.validation.method.ParameterValidationResult;
@@ -86,6 +88,17 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ApiError> handleInvalidCredentials(InvalidCredentialsException e) {
         log.debug("Login rejected: {}", e.getMessage());
         return respond(ApiError.of(ErrorCode.INVALID_CREDENTIALS));
+    }
+
+    /**
+     * A permission checked by {@code @PreAuthorize} on a controller: the check runs inside Spring
+     * MVC, so its exception reaches this class instead of {@code ApiAccessDeniedHandler}, and would
+     * otherwise answer 500. The same body as the 403 of the security filters.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException e) {
+        log.debug("Request rejected with status 403: {}", e.getMessage());
+        return respond(ApiError.of(HttpStatus.FORBIDDEN));
     }
 
     @ExceptionHandler(Exception.class)

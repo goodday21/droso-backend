@@ -42,9 +42,9 @@ are off.
 * **HTTP 401** `UNAUTHORIZED` without a token, or with a token that is invalid, expired, revoked or
   of a deleted user, with `WWW-Authenticate: Bearer` (and `error="invalid_token"` when a token was
   sent). The reason is not told.
-* **HTTP 403** `FORBIDDEN` with a valid token that is not enough. For now that is only the rest of
-  Actuator (`/actuator/metrics`, ...), which is closed to everyone until the deployment decides who
-  reads it; the permissions of the users come with TASK-008.
+* **HTTP 403** `FORBIDDEN` with a valid token whose user lacks the permission of the endpoint (see
+  below), and for the rest of Actuator (`/actuator/metrics`, ...), which is closed to everyone until
+  the deployment decides who reads it.
 * An unknown URL answers `401` without a token and `404` with one.
 
 The token is a JWT signed with HS256 and a server secret (`DROSO_JWT_SECRET`), valid for 30 minutes
@@ -66,6 +66,27 @@ are rejected), `exp`/`nbf` with a leeway of 60 seconds, `iss`, and then loads th
 a deleted user, or a `ver` that differs from `users.token_version`, is rejected at once although the
 token has not expired. Incrementing `token_version` therefore revokes every token of a user. The
 authorities come from the role in the database, not from the claim.
+
+#### Roles and permissions
+
+Every user has one role. The endpoints require a *permission*, never a role; which role has which
+permission is fixed in the code (`org.example.user.Role`), and the roles are nested:
+
+| Permission      | `USER` | `MANAGER` | `ADMIN` | Needed by                    |
+|-----------------|:------:|:---------:|:-------:|------------------------------|
+| `DEFECT_READ`   |   ✓    |     ✓     |    ✓    | `GET /api/v1/defects/{id}`   |
+| `DEFECT_CREATE` |   ✓    |     ✓     |    ✓    | `POST /api/v1/defects`       |
+| `DEFECT_UPDATE` |        |     ✓     |    ✓    | (the editing of the defects, to come) |
+| `USER_MANAGE`   |        |           |    ✓    | (the administration of the users, to come) |
+
+A change of the role in the database applies to the next request, without a new token.
+[`GET /api/v1/auth/me`](#the-current-user) lists the permissions of the current user, so that a
+client shows only what the user may do. The permission is checked after the body has been read and
+validated: an invalid body answers `400` even to a user who lacks the permission.
+
+The registration only creates users with the role `USER`. The first administrator is created on
+start-up from `DROSO_BOOTSTRAP_ADMIN_EMAIL` and `DROSO_BOOTSTRAP_ADMIN_PASSWORD` (see
+[Configuration](#configuration)).
 
 ### Health
 
@@ -133,6 +154,9 @@ any other is stored exactly as sent, its surrounding whitespace and line breaks 
 Lengths are counted in characters (Unicode code points), as by the `VARCHAR` columns: an emoji is
 one character.
 
+Needs the permission `DEFECT_CREATE` (every role has it). The author of the defect is the user of
+the token.
+
 **HTTP 201** with the header `Location: /api/v1/defects/{id}` (relative) and the stored defect:
 
 ```json
@@ -145,15 +169,18 @@ one character.
   "actualResult": "The old name is shown",
   "priority": "HIGH",
   "status": "NEW",
+  "createdBy": 3,
   "createdAt": "2026-10-27T09:15:30.123456Z",
   "updatedAt": "2026-10-27T09:15:30.123456Z"
 }
 ```
 
 Every field of the response is always present (`null` when not set). `id`, `status` (always `NEW`),
-`createdAt` and `updatedAt` (equal for a new defect) are chosen by the server.
+`createdBy` (the id of the reporting user), `createdAt` and `updatedAt` (equal for a new defect) are
+chosen by the server. `createdBy` is `null` only for the defects created before the authors were
+recorded.
 
-**Unknown properties are rejected**, including `id`, `status`, `createdAt` and `updatedAt`:
+**Unknown properties are rejected**, including `id`, `status`, `createdBy`, `createdAt` and `updatedAt`:
 `400 VALIDATION_ERROR` with `"fieldErrors": {"status": "is not allowed"}`. A client that sends them
 must not believe it has set them, and a misspelt `"priorty"` must not silently fall back to `MEDIUM`.
 Only the first unknown property is reported. An enum is not read from its index either
@@ -161,7 +188,7 @@ Only the first unknown property is reported. An enum is not read from its index 
 
 ### Getting a defect
 
-`GET /api/v1/defects/{id}`
+`GET /api/v1/defects/{id}`, needs the permission `DEFECT_READ` (every role has it).
 
 **HTTP 200** with the stored defect, in the same format as the response of `POST` above. Nothing is
 written: the request runs in a read-only transaction.
@@ -248,11 +275,20 @@ password nor its hash is ever returned:
 ### The current user
 
 `GET /api/v1/auth/me` with a token answers **HTTP 200** with the user, as currently stored (the
-role may differ from the claim of the token):
+role may differ from the claim of the token), and the [permissions](#roles-and-permissions) of
+that role, in a fixed order:
 
 ```json
-{ "id": 1, "email": "qwe.qwe+1@gmail.com", "role": "USER", "createdAt": "2026-10-27T10:15:30.123456Z" }
+{
+  "id": 1,
+  "email": "qwe.qwe+1@gmail.com",
+  "role": "USER",
+  "permissions": ["DEFECT_READ", "DEFECT_CREATE"],
+  "createdAt": "2026-10-27T10:15:30.123456Z"
+}
 ```
+
+The permissions are a hint for the interface; the server checks them on every request anyway.
 
 ### Error responses
 
@@ -308,6 +344,7 @@ Every error of the API (except the `503` of the health endpoint above) has the s
 | `DROSO_JWT_SECRET` (`droso.jwt.secret`) | **none, required** | Secret of the access tokens: Base64 of at least 32 random bytes |
 | `droso.jwt.issuer`          | `droso-backend`      | Claim `iss` of the tokens            |
 | `droso.jwt.access-token-ttl` | `30m`               | Lifetime of an access token          |
+| `DROSO_BOOTSTRAP_ADMIN_EMAIL` / `DROSO_BOOTSTRAP_ADMIN_PASSWORD` | none | The first administrator, created on start-up when there is none |
 
 `DROSO_JWT_SECRET` has no default anywhere, on purpose: whoever knows the secret can forge a token
 of any user, so it must never be in the repository. The application does not start without it, or
@@ -319,6 +356,19 @@ openssl rand -base64 32
 ```
 
 Changing the secret invalidates every issued token: all users have to log in again.
+
+The registration never creates an administrator. On every start-up, if no active user has the role
+`ADMIN`:
+
+* with `DROSO_BOOTSTRAP_ADMIN_EMAIL` and `DROSO_BOOTSTRAP_ADMIN_PASSWORD` set, that user is created
+  with the role `ADMIN` (the email and the password follow the rules of a registration);
+* without them, the application starts with a warning in the log, and nobody can manage the users;
+* with only one of them, an invalid value, or the **email of an existing active user**, the
+  application **does not start**. An existing user is never made an administrator this way: anyone
+  could have registered that email before.
+
+Once an administrator exists, both variables are ignored and may be removed. A deleted
+administrator does not count.
 
 The schema is owned by the Flyway migrations (`src/main/resources/db/migration`). Hibernate never
 changes it (`spring.jpa.hibernate.ddl-auto: validate`): it only checks on start-up that the entities
@@ -532,7 +582,13 @@ SELECT id, email, role_code, left(password_hash, 15), token_version, deleted_at,
 ```
 
 `UPDATE users SET token_version = token_version + 1` makes the next request with the token answer
-`401`; so does `deleted_at = now()`.
+`401`; so does `deleted_at = now()`. `/me` lists `"permissions":["DEFECT_READ","DEFECT_CREATE"]`;
+after `UPDATE users SET role_code = 'MANAGER'` the same token lists `DEFECT_UPDATE` too.
+
+To get an administrator, start the application once with `DROSO_BOOTSTRAP_ADMIN_EMAIL=admin@example.com`
+and `DROSO_BOOTSTRAP_ADMIN_PASSWORD=Adm1n-Secret!` on a database without one: the log says
+`Created the administrator with the id ...`, and the login with them answers a token whose `/me`
+has `"role":"ADMIN"`. Without the variables the log warns `There is no administrator`.
 
 ### Creating a defect
 
@@ -546,8 +602,10 @@ Without the header it answers `401 UNAUTHORIZED` and stores nothing.
 database (`psql -h localhost -U <POSTGRES_USER> <POSTGRES_DB>`, see `db-local.properties`):
 
 ```sql
-SELECT id, title, priority, status, created_at, updated_at FROM defects;
+SELECT id, title, priority, status, created_by, created_at, updated_at FROM defects;
 ```
+
+`created_by` (and `createdBy` in the response) is the id of the user of the token.
 
 `'{"title": "   "}'` answers `400 VALIDATION_ERROR` with `fieldErrors.title`, `'{"title": "Login
 fails", "status": "CLOSED"}'` answers `400` with `"status": "is not allowed"`, `'{"title": '`

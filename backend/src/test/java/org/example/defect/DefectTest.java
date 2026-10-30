@@ -14,8 +14,11 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class DefectTest {
 
+    /** The id of the reporting user; the entity does not check that it exists, the foreign key does. */
+    private static final Long AUTHOR = 7L;
+
     private static Defect withTitle(String title) {
-        return new Defect(title, null, null, null, null, null);
+        return new Defect(title, null, null, null, null, null, AUTHOR);
     }
 
     @Test
@@ -27,7 +30,7 @@ class DefectTest {
     @Test
     @DisplayName("a given priority is kept")
     void givenPriority() {
-        Defect defect = new Defect("Login fails", null, null, null, null, DefectPriority.CRITICAL);
+        Defect defect = new Defect("Login fails", null, null, null, null, DefectPriority.CRITICAL, AUTHOR);
 
         assertThat(defect.getPriority()).isEqualTo(DefectPriority.CRITICAL);
     }
@@ -51,7 +54,7 @@ class DefectTest {
     @Test
     @DisplayName("the optional fields are kept as given")
     void optionalFields() {
-        Defect defect = new Defect("Login fails", "description", "steps", "expected", "actual", null);
+        Defect defect = new Defect("Login fails", "description", "steps", "expected", "actual", null, AUTHOR);
 
         assertThat(defect.getDescription()).isEqualTo("description");
         assertThat(defect.getStepsToReproduce()).isEqualTo("steps");
@@ -62,7 +65,7 @@ class DefectTest {
     @Test
     @DisplayName("an optional field of invisible characters only is stored as null")
     void blankOptionalFieldsAreNull() {
-        Defect defect = new Defect("Login fails", "", "  \n\t ", "  ", "​﻿", null);
+        Defect defect = new Defect("Login fails", "", "  \n\t ", "  ", "​﻿", null, AUTHOR);
 
         assertThat(defect.getDescription()).isNull();
         assertThat(defect.getStepsToReproduce()).isNull();
@@ -73,7 +76,7 @@ class DefectTest {
     @Test
     @DisplayName("an optional field with visible text is kept as given, its whitespace included")
     void optionalFieldsAreNotTrimmed() {
-        Defect defect = new Defect("Login fails", " description\n", " steps", null, null, null);
+        Defect defect = new Defect("Login fails", " description\n", " steps", null, null, null, AUTHOR);
 
         assertThat(defect.getDescription()).isEqualTo(" description\n");
         assertThat(defect.getStepsToReproduce()).isEqualTo(" steps");

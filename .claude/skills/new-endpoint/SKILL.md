@@ -72,8 +72,11 @@ Write down, before the code (and in the plan of `start-task`):
 - Without a token: `401 UNAUTHORIZED` + `WWW-Authenticate: Bearer`; with a token that is not
   enough: `403 FORBIDDEN`. Both come from the existing handlers - do not answer them from the
   controller.
-- Once permissions exist (TASK-008): `@PreAuthorize("hasAuthority('<PERMISSION>')")` on
-  permissions, never on roles.
+- Every protected endpoint requires a permission: `@PreAuthorize("hasAuthority('<PERMISSION>')")`
+  with a constant of `org.example.user.Permission`, never a role; a new permission goes into the
+  matrix of `Role`. `EndpointAccessIntegrationTest` fails without it; an endpoint open to every
+  authenticated user (like `/me`) goes into its `ANY_USER` on purpose. A user without the
+  permission gets `403 FORBIDDEN` from `ApiExceptionHandler`.
 
 ## Tests
 
@@ -90,7 +93,8 @@ Write down, before the code (and in the plan of `start-task`):
 - Compare error bodies as whole JSON (`jsonMapper.readTree(...)`), as the existing tests do, so
   that a changed code, message or `fieldErrors` fails.
 - Cover at least: success (status, headers, body, the stored row), `401` without a token (and with
-  a broken one), `403` if a permission is required, every `400` of the DTO (missing, too long,
+  a broken one), `403` if a permission is required (a role without it; if every role has it, call
+  the controller bean under an authentication without it, as `DefectPermissionIntegrationTest`), every `400` of the DTO (missing, too long,
   invisible, unknown property, wrong enum), `404` for a missing id, non-canonical ids
   (`026`, `0x1A`, `+26`), any `409`.
 - A web test without a database: `@WebMvcTest` + `@AutoConfigureMockMvc(addFilters = false)`.

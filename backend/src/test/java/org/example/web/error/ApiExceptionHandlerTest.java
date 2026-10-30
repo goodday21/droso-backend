@@ -22,6 +22,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -83,6 +84,12 @@ class ApiExceptionHandlerTest {
         @GetMapping("/closed")
         void closed() {
             throw new RegistrationDisabledException();
+        }
+
+        /** What a denied {@code @PreAuthorize} throws inside Spring MVC. */
+        @GetMapping("/denied")
+        void denied() {
+            throw new AuthorizationDeniedException(SECRET);
         }
 
         @GetMapping("/failure")
@@ -278,6 +285,20 @@ class ApiExceptionHandlerTest {
                 .andExpect(jsonPath("$.code").value("REGISTRATION_DISABLED"))
                 .andExpect(jsonPath("$.message").value("Registration is disabled"))
                 .andExpect(jsonPath("$.fieldErrors").isEmpty());
+    }
+
+    @Test
+    @DisplayName("a permission denied by @PreAuthorize answers 403 FORBIDDEN, not 500, without the message")
+    void accessDenied() throws Exception {
+        String body = body(mockMvc.perform(get("/probe/denied"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+                .andExpect(jsonPath("$.message").value("Forbidden"))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty())
+                .andExpect(jsonPath("$.*", Matchers.hasSize(4))));
+
+        assertThat(body).doesNotContain("secret_db");
     }
 
     @Test

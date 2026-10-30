@@ -53,7 +53,7 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
         Integer failed = jdbc.queryForObject(
                 "SELECT count(*) FROM flyway_schema_history WHERE success = false", Integer.class);
 
-        assertThat(versions).contains("1", "2", "3", "4", "5");
+        assertThat(versions).contains("1", "2", "3", "4", "5", "6");
         assertThat(failed).isZero();
         assertThat(tableExists(jdbc, "demo_item")).isTrue();
         assertThat(tableExists(jdbc, "defects")).isTrue();
@@ -86,7 +86,25 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
                 "priority character varying 16 NO NO",
                 "status character varying 16 NO NO",
                 "created_at timestamp with time zone null NO NO",
-                "updated_at timestamp with time zone null NO NO");
+                "updated_at timestamp with time zone null NO NO",
+                "created_by bigint null YES NO");
+    }
+
+    @Test
+    @DisplayName("defects.created_by refers to users and is indexed")
+    void defectsCreatedBy() {
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+
+        String foreignKey = jdbc.queryForObject("""
+                SELECT pg_get_constraintdef(oid) FROM pg_constraint
+                WHERE conrelid = 'defects'::regclass AND conname = 'defects_created_by_fkey'
+                """, String.class);
+        String index = jdbc.queryForObject(
+                "SELECT indexdef FROM pg_indexes WHERE tablename = 'defects' AND indexname = 'defects_created_by_idx'",
+                String.class);
+
+        assertThat(foreignKey).isEqualTo("FOREIGN KEY (created_by) REFERENCES users(id)");
+        assertThat(index).endsWith("USING btree (created_by)");
     }
 
     @Test

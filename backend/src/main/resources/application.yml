@@ -74,6 +74,14 @@ droso:
     issuer: droso-backend
     # 30 minutes until the refresh tokens arrive (TASK-010), then 15.
     access-token-ttl: 30m
+  # The first administrator, created on start-up when no active one exists (BootstrapAdminService).
+  # Both values come from the environment only and have no default: DROSO_BOOTSTRAP_ADMIN_EMAIL and
+  # DROSO_BOOTSTRAP_ADMIN_PASSWORD. Without them the application starts with a warning; with an
+  # invalid or already registered email it does not start. Ignored once an administrator exists.
+  bootstrap:
+    admin:
+      email: ${DROSO_BOOTSTRAP_ADMIN_EMAIL:}
+      password: ${DROSO_BOOTSTRAP_ADMIN_PASSWORD:}
 
 # Parameters of the health probe.
 health:

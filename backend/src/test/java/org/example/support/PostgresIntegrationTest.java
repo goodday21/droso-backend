@@ -70,6 +70,11 @@ public abstract class PostgresIntegrationTest {
         // The application does not start without a secret of the access tokens; a test may forge
         // tokens with it (TestUsers.JWT_SECRET).
         registry.add("droso.jwt.secret", () -> TestUsers.JWT_SECRET);
+        // No administrator is created on start-up, whatever the developer has in DROSO_BOOTSTRAP_ADMIN_*:
+        // the tables are emptied before every test anyway, and a taken email would stop the context.
+        // BootstrapAdminIntegrationTest calls the service with its own settings.
+        registry.add("droso.bootstrap.admin.email", () -> "");
+        registry.add("droso.bootstrap.admin.password", () -> "");
     }
 
     @DynamicPropertySource

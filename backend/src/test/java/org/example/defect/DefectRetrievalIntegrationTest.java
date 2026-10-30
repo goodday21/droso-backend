@@ -94,7 +94,21 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.status").value("NEW"))
                 .andExpect(jsonPath("$.createdAt").value("2026-01-02T03:04:05.123456Z"))
                 .andExpect(jsonPath("$.updatedAt").value("2026-03-04T05:06:07.654321Z"))
-                .andExpect(jsonPath("$.*", Matchers.hasSize(10)));
+                .andExpect(jsonPath("$.createdBy").value(Matchers.nullValue()))
+                .andExpect(jsonPath("$.*", Matchers.hasSize(11)));
+    }
+
+    @Test
+    @DisplayName("the author is answered as the id of the user; a defect from before V6 has none (null)")
+    void author() throws Exception {
+        long author = TestUsers.create(users, Role.MANAGER).getId();
+        long id = insert("Crash on start", null, null, null, null, "LOW",
+                "2026-01-02T03:04:05Z", "2026-01-02T03:04:05Z");
+        jdbc.update("UPDATE defects SET created_by = ? WHERE id = ?", author, id);
+
+        mockMvc.perform(get(URL + "/{id}", id).with(authorization(bearer)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.createdBy").value(author));
     }
 
     @Test
@@ -109,7 +123,7 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.stepsToReproduce").value(Matchers.nullValue()))
                 .andExpect(jsonPath("$.expectedResult").value(Matchers.nullValue()))
                 .andExpect(jsonPath("$.actualResult").value(Matchers.nullValue()))
-                .andExpect(jsonPath("$.*", Matchers.hasSize(10)));
+                .andExpect(jsonPath("$.*", Matchers.hasSize(11)));
     }
 
     @Test

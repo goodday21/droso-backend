@@ -79,7 +79,7 @@ class DefectRetrievalHttpIntegrationTest extends PostgresIntegrationTest {
                 type -> assertThat(type).startsWith("application/json"));
         assertThat(jsonMapper.readTree(response.body())).isEqualTo(jsonMapper.readTree("""
                 {"id": 26, "title": "Crash on start", "description": null, "stepsToReproduce": null,
-                 "expectedResult": null, "actualResult": null, "priority": "HIGH", "status": "NEW",
+                 "expectedResult": null, "actualResult": null, "priority": "HIGH", "status": "NEW", "createdBy": null,
                  "createdAt": "2026-01-02T03:04:05.123456Z", "updatedAt": "2026-01-02T03:04:05.123456Z"}
                 """));
     }

@@ -104,6 +104,42 @@ public class User {
         this.updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 
+    /**
+     * Gives the user another role. Takes effect with the next request: the permissions are read
+     * from the database on every request, so the tokens stay valid (their claim {@code role} is
+     * then outdated, which only the client reads).
+     *
+     * @throws IllegalArgumentException if the role is missing
+     * @throws IllegalStateException    if the user is deleted
+     */
+    public void changeRole(Role role) {
+        if (role == null) {
+            throw new IllegalArgumentException("The role is required");
+        }
+        requireActive();
+        this.role = role;
+    }
+
+    /**
+     * Soft-deletes the user and revokes every access token issued so far, so that the user is
+     * logged out at once rather than when the tokens expire. The row stays, and the email becomes
+     * free for a new registration.
+     *
+     * @param now the moment of the deletion
+     * @throws IllegalStateException if the user is deleted already
+     */
+    public void delete(Instant now) {
+        requireActive();
+        this.deletedAt = now.truncatedTo(ChronoUnit.MICROS);
+        this.tokenVersion++;
+    }
+
+    private void requireActive() {
+        if (!isActive()) {
+            throw new IllegalStateException("The user is deleted");
+        }
+    }
+
     public Long getId() {
         return id;
     }

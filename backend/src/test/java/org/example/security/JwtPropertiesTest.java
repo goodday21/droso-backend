@@ -20,7 +20,7 @@ import org.springframework.core.env.SystemEnvironmentPropertySource;
 
 class JwtPropertiesTest {
 
-    private static final Duration TTL = Duration.ofMinutes(30);
+    private static final Duration TTL = Duration.ofMinutes(15);
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withUserConfiguration(PropertiesConfig.class);

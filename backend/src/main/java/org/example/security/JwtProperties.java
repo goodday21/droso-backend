@@ -22,13 +22,14 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *                       {@code openssl rand -base64 32}
  * @param issuer         the claim {@code iss} of the issued tokens, required on verification;
  *                       {@code droso-backend} by default
- * @param accessTokenTtl how long an access token is valid; 30 minutes by default
+ * @param accessTokenTtl how long an access token is valid; 15 minutes by default (a refresh token
+ *                       gets the next one, {@code POST /api/v1/auth/refresh})
  */
 @ConfigurationProperties(prefix = "droso.jwt")
 public record JwtProperties(
         String secret,
         @DefaultValue("droso-backend") String issuer,
-        @DefaultValue("30m") Duration accessTokenTtl) {
+        @DefaultValue("15m") Duration accessTokenTtl) {
 
     /** 256 bits: the key of HS256 must not be shorter than the hash (RFC 7518, section 3.2). */
     static final int MIN_SECRET_BYTES = 32;

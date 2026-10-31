@@ -8,6 +8,9 @@ import java.util.TreeMap;
 
 import org.example.auth.EmailAlreadyRegisteredException;
 import org.example.auth.InvalidCredentialsException;
+import org.example.auth.InvalidRefreshTokenException;
+import org.example.auth.OriginNotAllowedException;
+import org.example.auth.RefreshCookie;
 import org.example.auth.RegistrationDisabledException;
 import org.example.user.LastAdminException;
 import org.jspecify.annotations.Nullable;
@@ -89,6 +92,24 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ApiError> handleInvalidCredentials(InvalidCredentialsException e) {
         log.debug("Login rejected: {}", e.getMessage());
         return respond(ApiError.of(ErrorCode.INVALID_CREDENTIALS));
+    }
+
+    /**
+     * Deletes the cookie as well: it is of no use any more, and the browser would otherwise keep
+     * sending it. Without {@code WWW-Authenticate}, like a failed login.
+     */
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    public ResponseEntity<ApiError> handleInvalidRefreshToken(InvalidRefreshTokenException e) {
+        log.debug("Refresh rejected: {}", e.getMessage());
+        ApiError error = ApiError.of(ErrorCode.INVALID_REFRESH_TOKEN);
+        return ResponseEntity.status(error.status()).header(HttpHeaders.SET_COOKIE, RefreshCookie.cleared()).body(error);
+    }
+
+    /** The same body as any other 403: the reason is a misconfiguration or a forged request. */
+    @ExceptionHandler(OriginNotAllowedException.class)
+    public ResponseEntity<ApiError> handleOriginNotAllowed(OriginNotAllowedException e) {
+        log.debug("Request rejected with status 403: {}", e.getMessage());
+        return respond(ApiError.of(HttpStatus.FORBIDDEN));
     }
 
     @ExceptionHandler(LastAdminException.class)

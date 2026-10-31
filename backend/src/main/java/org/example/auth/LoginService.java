@@ -3,8 +3,8 @@ package org.example.auth;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.example.auth.RefreshTokenService.SessionTokens;
 import org.example.auth.model.LoginRequest;
-import org.example.auth.model.TokenResponse;
 import org.example.security.AccessTokenService;
 import org.example.user.User;
 import org.example.user.UserRepository;
@@ -21,6 +21,7 @@ public class LoginService {
     private final UserRepository repository;
     private final PasswordEncoder passwordEncoder;
     private final AccessTokenService tokens;
+    private final RefreshTokenService refreshTokens;
 
     /**
      * The hash of a random password nobody knows, checked when the email has no active user. Without
@@ -29,26 +30,29 @@ public class LoginService {
      */
     private final String dummyHash;
 
-    public LoginService(UserRepository repository, PasswordEncoder passwordEncoder, AccessTokenService tokens) {
+    public LoginService(UserRepository repository, PasswordEncoder passwordEncoder, AccessTokenService tokens,
+            RefreshTokenService refreshTokens) {
         this.repository = repository;
         this.passwordEncoder = passwordEncoder;
         this.tokens = tokens;
+        this.refreshTokens = refreshTokens;
         this.dummyHash = passwordEncoder.encode(UUID.randomUUID().toString());
     }
 
     /**
-     * Issues an access token if the email belongs to an active user and the password matches.
+     * Issues an access token and the first refresh token of a new family if the email belongs to an
+     * active user and the password matches.
      *
      * @throws InvalidCredentialsException otherwise, the same for every reason
      */
-    @Transactional(readOnly = true)
-    public TokenResponse login(LoginRequest request) {
+    @Transactional
+    public SessionTokens login(LoginRequest request) {
         Optional<User> user = repository.findByEmailAndDeletedAtIsNull(request.email());
         // The password is checked in either case, so that both take the same time.
         boolean matches = passwordEncoder.matches(request.password(), user.map(User::getPasswordHash).orElse(dummyHash));
         if (user.isEmpty() || !matches) {
             throw new InvalidCredentialsException();
         }
-        return TokenResponse.of(tokens.issue(user.get()));
+        return new SessionTokens(tokens.issue(user.get()), refreshTokens.issue(user.get()));
     }
 }

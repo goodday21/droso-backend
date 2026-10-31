@@ -15,6 +15,8 @@ public enum ErrorCode {
     MALFORMED_REQUEST(HttpStatus.BAD_REQUEST, "Malformed request body"),
     /** A failed login: the email has no active user or the password does not match. */
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "Invalid email or password"),
+    /** A failed refresh: the refresh cookie is missing, unknown, expired or revoked. */
+    INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "Invalid refresh token"),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "Resource not found"),
     EMAIL_ALREADY_REGISTERED(HttpStatus.CONFLICT, "Email is already registered"),
     REGISTRATION_DISABLED(HttpStatus.FORBIDDEN, "Registration is disabled"),

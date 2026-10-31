@@ -32,13 +32,14 @@ class LoginServiceTest {
     private final UserRepository repository = mock(UserRepository.class);
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
     private final AccessTokenService tokens = mock(AccessTokenService.class);
+    private final RefreshTokenService refreshTokens = mock(RefreshTokenService.class);
 
     private LoginService service;
 
     @BeforeEach
     void createService() {
         when(passwordEncoder.encode(anyString())).thenReturn(DUMMY_HASH);
-        service = new LoginService(repository, passwordEncoder, tokens);
+        service = new LoginService(repository, passwordEncoder, tokens, refreshTokens);
     }
 
     @Test
@@ -53,6 +54,7 @@ class LoginServiceTest {
 
         verify(passwordEncoder).matches("Sup3r-Secret!", DUMMY_HASH);
         verify(tokens, never()).issue(any());
+        verify(refreshTokens, never()).issue(any());
     }
 
     @Test
@@ -66,6 +68,7 @@ class LoginServiceTest {
                 .isInstanceOf(InvalidCredentialsException.class);
 
         verify(passwordEncoder).matches(eq("Wrong-Pa55word"), eq(USER_HASH));
+        verify(refreshTokens, never()).issue(any());
     }
 
     @Test

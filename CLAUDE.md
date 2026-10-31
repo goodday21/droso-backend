@@ -28,9 +28,16 @@ Guidance for Claude Code in this repository. The user-facing documentation is
     a count without locks lets two admins demote each other, and without the row lock a concurrent
     role change would overwrite a deletion (Hibernate writes every column). `User.delete` bumps
     `token_version` itself.
-  - `auth` — `AuthController` (`POST /api/v1/auth/register`, `POST /api/v1/auth/login`,
-    `GET /api/v1/auth/me`), `RegistrationService`, `LoginService`, `AuthProperties` (`droso.auth.*`);
-    DTOs in `auth.model`.
+  - `auth` — `AuthController` (`POST /api/v1/auth/register`, `/login`, `/refresh`, `/logout`,
+    `/logout-all`, `GET /api/v1/auth/me`), `RegistrationService`, `LoginService`, `AuthProperties`
+    (`droso.auth.*`: registration, refresh TTL 7d / max lifetime 30d, `allowed-origins`); DTOs in
+    `auth.model`. Refresh tokens: `RefreshToken` (table `refresh_tokens`, only the SHA-256 stored),
+    `RefreshTokenRepository`, `RefreshTokenService` (issue, rotate with reuse detection, logout,
+    logout everywhere), `RefreshCookie` (`droso_refresh`, `HttpOnly; Secure; SameSite=Strict;
+    Path=/api/v1/auth`), `OriginPolicy` (`Origin` required and allowed on refresh/logout, else 403).
+    A rejected refresh returns an empty `Optional` instead of throwing, so that the revocation of a
+    family commits; `lockByTokenHash` (`FOR UPDATE`) makes a concurrent second refresh a reuse.
+    A refresh token is bound to `users.token_version` like an access token.
   - `bootstrap` — `BootstrapAdminService`, run on start-up by `BootstrapAdminRunner`: creates an
     `ADMIN` from `droso.bootstrap.admin.*` (`DROSO_BOOTSTRAP_ADMIN_EMAIL/PASSWORD`) when no active
     one exists; a taken email or invalid settings stop the start-up.
@@ -40,7 +47,10 @@ Guidance for Claude Code in this repository. The user-facing documentation is
     `AccessTokenService` (issues the tokens), `UserJwtAuthenticationConverter` (loads the user per
     request; principal `AuthenticatedUser`), and the writers of `ApiError` outside Spring MVC
     (`ApiAuthenticationEntryPoint`, `ApiAccessDeniedHandler`, `ApiAuthenticationFailureHandler`,
-    `ApiRequestRejectedHandler`).
+    `ApiRequestRejectedHandler`, `ApiCorsProcessor`). CORS (`/api/**`, allowlist
+    `droso.auth.allowed-origins`, credentials) is a `CorsFilter` built in `SecurityConfig`, not a
+    bean: a `CorsFilter` bean would also run as a servlet filter, a `CorsConfigurationSource` bean
+    would make Spring Security add a second filter without `ApiCorsProcessor`.
   - `text` — `InvisibleText`.
   - `web` — `CanonicalIdEditor`: ids of URLs in canonical decimal form only (Spring's default
     conversion would read `0x1A`, `026`, `+26` as 26); register it with `@InitBinder` per controller.
@@ -75,8 +85,9 @@ PostgreSQL. Spring Boot 4 differs from 3 in ways that are easy to get wrong:
 - "Stripped" and "blank" mean `InvisibleText`, never `String.strip()`/`isBlank()` alone: those miss
   the no-break spaces (U+00A0, U+2007, U+202F) and the zero-width characters. The DTO normalizes
   the same way before validation, so that the rules apply to the stored values.
-- `users.token_version` (claim `ver`): incrementing it revokes every access token of the user; do
-  it on every change that must log the user out (deletion, password, role if needed).
+- `users.token_version` (claim `ver`, column `refresh_tokens.token_version`): incrementing it
+  revokes every access and refresh token of the user (`User.revokeTokens`, `User.delete`); do it on
+  every change that must log the user out (deletion, logout everywhere, password, role if needed).
 - `User`: the email is the login, stored stripped (`InvisibleText`) and lower-cased with
   `Locale.ROOT` (the column has a `CHECK` for it); the part after `+` is kept. The password is never
   normalized and never stored, logged or returned: only `password_hash` (`{bcrypt}$2a$12$...`), and
@@ -96,8 +107,9 @@ present (`{}` when empty), sorted, several errors of one field joined with `; `.
 `VALIDATION_ERROR` (400), `MALFORMED_REQUEST` (400), `REGISTRATION_DISABLED` (403),
 `RESOURCE_NOT_FOUND` (404), `EMAIL_ALREADY_REGISTERED` (409, with `fieldErrors.email`),
 `LAST_ADMIN` (409),
-`INVALID_CREDENTIALS` (401, failed login), `UNAUTHORIZED` (401, with `WWW-Authenticate: Bearer`),
-`FORBIDDEN` (403), `BAD_REQUEST` (400, a URL the firewall of Spring Security rejects, e.g. `;`),
+`INVALID_CREDENTIALS` (401, failed login), `INVALID_REFRESH_TOKEN` (401, failed refresh, deletes the
+cookie), `UNAUTHORIZED` (401, with `WWW-Authenticate: Bearer`), `FORBIDDEN` (403, also a foreign or
+missing `Origin`), `BAD_REQUEST` (400, a URL the firewall of Spring Security rejects, e.g. `;`),
 `INTERNAL_ERROR` (500), otherwise the name of the HTTP status (`METHOD_NOT_ALLOWED`, …).
 Messages are fixed per code: never put the text of an exception into a response. Unknown JSON
 properties and enum indexes are rejected (`spring.jackson.*` in `application.yml`); a Jackson error
@@ -109,7 +121,9 @@ contract (followed by `droso-frontend`) and must not change.
 ## Security
 
 - Every request needs `Authorization: Bearer <JWT>` except those listed in `SecurityConfig`
-  (`/api/v1/health`, `POST /api/v1/auth/register|login`, `/error`, `/actuator/health`); the rest of
+  (`/api/v1/health`, `POST /api/v1/auth/register|login|refresh|logout`, `/error`,
+  `/actuator/health`); refresh and logout are authenticated by the refresh cookie and check
+  `Origin` (`OriginPolicy`), which is what replaces CSRF protection for them. The rest of
   Actuator is `denyAll`. A new public endpoint must be added there explicitly, and to `PUBLIC` of
   `EndpointAccessIntegrationTest`, which checks every mapped endpoint without a token (401 unless
   listed there).

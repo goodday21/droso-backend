@@ -64,10 +64,13 @@ class EndpointAccessIntegrationTest extends PostgresIntegrationTest {
             "GET /api/v1/health",
             "POST /api/v1/auth/register",
             "POST /api/v1/auth/login",
+            // Authenticated by the refresh cookie, called when the access token has expired.
+            "POST /api/v1/auth/refresh",
+            "POST /api/v1/auth/logout",
             "GET /error");
 
     /** The protected endpoints that any authenticated user may call, whatever the role. */
-    private static final Set<String> ANY_USER = Set.of("GET /api/v1/auth/me");
+    private static final Set<String> ANY_USER = Set.of("GET /api/v1/auth/me", "POST /api/v1/auth/logout-all");
 
     /** {@code hasAuthority('<PERMISSION>')}, the only form of check the API uses. */
     private static final Pattern HAS_AUTHORITY = Pattern.compile("hasAuthority\\('([A-Z_]+)'\\)");

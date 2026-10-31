@@ -94,6 +94,7 @@ class LoginIntegrationTest extends PostgresIntegrationTest {
         String body = result
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().doesNotExist(HttpHeaders.WWW_AUTHENTICATE))
+                .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE))
                 .andReturn().getResponse().getContentAsString();
         assertThat(jsonMapper.readTree(body)).isEqualTo(jsonMapper.readTree(INVALID_CREDENTIALS));
     }
@@ -101,15 +102,17 @@ class LoginIntegrationTest extends PostgresIntegrationTest {
     // ---------------------------------------------------------------- successful login
 
     @Test
-    @DisplayName("a valid login answers 200 with a bearer token of 30 minutes that no cache may keep")
+    @DisplayName("a valid login answers 200 with a bearer token of 15 minutes that no cache may keep, and the refresh cookie")
     void login() throws Exception {
         ResultActions result = login(EMAIL, TestUsers.PASSWORD)
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE))
+                .andExpect(header().string(HttpHeaders.SET_COOKIE, Matchers.matchesPattern(
+                        "droso_refresh=[A-Za-z0-9_-]{43}; Path=/api/v1/auth; Max-Age=604800; Expires=.*; "
+                                + "Secure; HttpOnly; SameSite=Strict")))
                 .andExpect(jsonPath("$.accessToken").isString())
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.expiresIn").value(1800))
+                .andExpect(jsonPath("$.expiresIn").value(900))
                 .andExpect(jsonPath("$.*", Matchers.hasSize(3)));
 
         assertThat(result.andReturn().getResponse().getContentAsString()).doesNotContain(TestUsers.PASSWORD);
@@ -136,7 +139,7 @@ class LoginIntegrationTest extends PostgresIntegrationTest {
         assertThat(claims.get("email").asString()).isEqualTo(EMAIL);
         assertThat(claims.get("role").asString()).isEqualTo("MANAGER");
         assertThat(claims.get("ver").asInt()).isZero();
-        assertThat(claims.get("exp").asLong() - claims.get("iat").asLong()).isEqualTo(1800);
+        assertThat(claims.get("exp").asLong() - claims.get("iat").asLong()).isEqualTo(900);
         assertThat(claims.toString()).doesNotContain(TestUsers.PASSWORD).doesNotContain("bcrypt");
     }
 

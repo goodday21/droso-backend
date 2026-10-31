@@ -32,12 +32,16 @@ Every endpoint needs an access token, except these:
 | `GET /api/v1/health`              | The public health contract                                |
 | `POST /api/v1/auth/register`      | Anyone may register (unless the registration is disabled) |
 | `POST /api/v1/auth/login`         | Issues the token                                          |
+| `POST /api/v1/auth/refresh`       | Authenticated by the refresh cookie ([Refreshing](#refreshing-the-access-token)) |
+| `POST /api/v1/auth/logout`        | Authenticated by the refresh cookie ([Logging out](#logging-out)) |
 | `GET /actuator/health`            | Probe of the platform, without details                    |
 
 The token is obtained with [`POST /api/v1/auth/login`](#logging-in) and sent in the header
 `Authorization: Bearer <accessToken>`, never in the URL (a query parameter `access_token` is
-ignored). The API is stateless: no session, no cookie, no CSRF token; HTTP Basic and form login
-are off.
+ignored). The API is stateless: no session, no CSRF token; HTTP Basic and form login are off. The
+only cookie is the refresh token, which gets a new access token when the old one expires
+([Refreshing](#refreshing-the-access-token)); it is sent to `/api/v1/auth` only and never
+authenticates any other request.
 
 * **HTTP 401** `UNAUTHORIZED` without a token, or with a token that is invalid, expired, revoked or
   of a deleted user, with `WWW-Authenticate: Bearer` (and `error="invalid_token"` when a token was
@@ -47,7 +51,7 @@ are off.
   the deployment decides who reads it.
 * An unknown URL answers `401` without a token and `404` with one.
 
-The token is a JWT signed with HS256 and a server secret (`DROSO_JWT_SECRET`), valid for 30 minutes
+The token is a JWT signed with HS256 and a server secret (`DROSO_JWT_SECRET`), valid for 15 minutes
 (`droso.jwt.access-token-ttl`). It is signed, not encrypted: its claims can be read by anyone who
 holds it, and carry nothing secret.
 
@@ -64,8 +68,14 @@ holds it, and carry nothing secret.
 On every request the server checks the signature (HS256 only: `alg: none` and any other algorithm
 are rejected), `exp`/`nbf` with a leeway of 60 seconds, `iss`, and then loads the user by `sub`:
 a deleted user, or a `ver` that differs from `users.token_version`, is rejected at once although the
-token has not expired. Incrementing `token_version` therefore revokes every token of a user. The
-authorities come from the role in the database, not from the claim.
+token has not expired. Incrementing `token_version` therefore revokes every token of a user, the
+refresh tokens included (a deletion, [`/logout-all`](#logging-out)). The authorities come from the
+role in the database, not from the claim.
+
+A request from a browser page of another origin is allowed (CORS, with credentials) only from the
+origins of `droso.auth.allowed-origins` (`DROSO_AUTH_ALLOWED_ORIGINS`, by default
+`http://localhost:4200`); from any other origin every endpoint under `/api` answers
+`403 FORBIDDEN`, a preflight included.
 
 #### Roles and permissions
 
@@ -259,7 +269,13 @@ password nor its hash is ever returned:
 **HTTP 200** with `Cache-Control: no-store`:
 
 ```json
-{ "accessToken": "eyJraWQiOi...", "tokenType": "Bearer", "expiresIn": 1800 }
+{ "accessToken": "eyJraWQiOi...", "tokenType": "Bearer", "expiresIn": 900 }
+```
+
+and the refresh token as a cookie, never in the body:
+
+```
+Set-Cookie: droso_refresh=<43 characters>; Path=/api/v1/auth; Max-Age=604800; Expires=...; Secure; HttpOnly; SameSite=Strict
 ```
 
 * **email** is normalized like on the registration (`Qwe.Qwe+1@Gmail.com` logs in as well); the
@@ -270,7 +286,46 @@ password nor its hash is ever returned:
 * **HTTP 400** `VALIDATION_ERROR` only for a missing email or password, an email longer than 254 or
   a password longer than 64 characters. The rules of a new password are not applied: a password
   accepted by an older policy still logs in.
-* There is no refresh token yet (TASK-010): after `expiresIn` seconds the client logs in again.
+* Every login starts a new *family* of refresh tokens (one per device or browser): logging in on a
+  phone does not end the login on a laptop.
+
+### Refreshing the access token
+
+`POST /api/v1/auth/refresh`, without a body and without `Authorization`, with the refresh cookie
+(a browser sends it on its own; `fetch` needs `credentials: "include"` only from another origin)
+and the header `Origin` (a browser sends it with every `POST`).
+
+**HTTP 200** with `Cache-Control: no-store`, the same body as the login (a new access token) and a
+**new** refresh cookie: the one sent is revoked (rotation).
+
+* **HTTP 401** `INVALID_REFRESH_TOKEN`, with the cookie deleted (`Max-Age=0`) and without
+  `WWW-Authenticate`, if the cookie is missing, unknown, expired or revoked, or its user is deleted
+  or has logged out everywhere. The client asks for the password again. The cases are not told
+  apart.
+* A cookie that has already been replaced and is sent again revokes its whole family: either it was
+  stolen, or two requests raced with one cookie, and the server cannot tell which. A client must
+  therefore never refresh twice at once with the same cookie, not even from two tabs.
+* **HTTP 403** `FORBIDDEN` if `Origin` is missing or not in `droso.auth.allowed-origins`; the cookie
+  is left untouched.
+* **HTTP 401** `UNAUTHORIZED` if an `Authorization` header with an invalid or expired token is sent
+  along: the bearer filter rejects it before the endpoint. A client sends no access token here.
+* A refresh token is valid for 7 days after its issue (`droso.auth.refresh-token-ttl`); each refresh
+  issues a new one, so a user who comes back within a week stays logged in. The tokens of one login
+  end 30 days after it (`droso.auth.refresh-token-max-lifetime`), however often they are refreshed;
+  the last cookie expires with them.
+* The cookie is `HttpOnly` (no script can read it), `Secure` (browsers accept it on
+  `http://localhost` too), `SameSite=Strict` and limited to `Path=/api/v1/auth`. Only the SHA-256
+  of the token is stored (`refresh_tokens`).
+
+### Logging out
+
+* `POST /api/v1/auth/logout` with the cookie and `Origin`, like a refresh: **HTTP 204**, the
+  refresh tokens of this login are revoked and the cookie is deleted. Always `204`, with or without
+  a valid cookie (`403 FORBIDDEN` without an allowed `Origin`). The access token stays valid until
+  it expires (at most 15 minutes): the client forgets it.
+* `POST /api/v1/auth/logout-all` with an access token (any role): **HTTP 204**, every login of the
+  user on every device ends at once: `token_version` is incremented, so every access token (this one
+  included) and every refresh token fails from the next request on. The cookie is deleted as well.
 
 ### The current user
 
@@ -351,7 +406,8 @@ Every error of the API (except the `503` of the health endpoint above) has the s
 | 400  | `BAD_REQUEST`         | The URL is rejected by the firewall of Spring Security (e.g. a `;`)                     |
 | 401  | `UNAUTHORIZED`        | No access token, or an invalid one ([Authentication](#authentication))                  |
 | 401  | `INVALID_CREDENTIALS` | A failed login                                                                         |
-| 403  | `FORBIDDEN`           | A valid token that is not enough                                                       |
+| 401  | `INVALID_REFRESH_TOKEN` | A failed refresh; the refresh cookie is deleted                                      |
+| 403  | `FORBIDDEN`           | A valid token that is not enough; a request from an origin that is not allowed (CORS, refresh, logout) |
 | 403  | `REGISTRATION_DISABLED` | A registration while `droso.auth.registration-enabled` is `false`                    |
 | 404  | `RESOURCE_NOT_FOUND`  | `ResourceNotFoundException` is thrown, or the URL is unknown                            |
 | 409  | `EMAIL_ALREADY_REGISTERED` | A registration with the email of an active user; `fieldErrors.email` is set        |
@@ -369,7 +425,7 @@ Every error of the API (except the `503` of the health endpoint above) has the s
   rejected value, and an unknown property of the body as `is not allowed`.
 * The handler is `org.example.web.error.ApiExceptionHandler`. It covers the requests that reach
   Spring MVC. The errors of Spring Security, which runs before, are written in the same format by
-  `org.example.security` (`401`, `403`, the `400` of the firewall, and a `500 INTERNAL_ERROR` when
+  `org.example.security` (`401`, `403` including a refused cross-origin request, the `400` of the firewall, and a `500 INTERNAL_ERROR` when
   the database fails while a token is checked). An error raised by Tomcat itself (an invalid URL)
   gets the default body of Spring Boot, without message or stack trace.
 
@@ -385,7 +441,10 @@ Every error of the API (except the `503` of the health endpoint above) has the s
 | `droso.auth.registration-enabled` (`DROSO_AUTH_REGISTRATION_ENABLED`) | `true` | Whether anyone may register (always as `USER`) |
 | `DROSO_JWT_SECRET` (`droso.jwt.secret`) | **none, required** | Secret of the access tokens: Base64 of at least 32 random bytes |
 | `droso.jwt.issuer`          | `droso-backend`      | Claim `iss` of the tokens            |
-| `droso.jwt.access-token-ttl` | `30m`               | Lifetime of an access token          |
+| `droso.jwt.access-token-ttl` | `15m`               | Lifetime of an access token          |
+| `droso.auth.refresh-token-ttl` | `7d`              | Lifetime of a refresh token after its issue (renewed by every refresh) |
+| `droso.auth.refresh-token-max-lifetime` | `30d`    | Lifetime of the refresh tokens of one login, however often refreshed |
+| `droso.auth.allowed-origins` (`DROSO_AUTH_ALLOWED_ORIGINS`) | `http://localhost:4200` | The origins (`scheme://host[:port]`, comma-separated) of the pages allowed to call the API from a browser: CORS, refresh, logout |
 | `DROSO_BOOTSTRAP_ADMIN_EMAIL` / `DROSO_BOOTSTRAP_ADMIN_PASSWORD` | none | The first administrator, created on start-up when there is none |
 
 `DROSO_JWT_SECRET` has no default anywhere, on purpose: whoever knows the secret can forge a token
@@ -397,7 +456,11 @@ Generate one per environment and keep it out of Git:
 openssl rand -base64 32
 ```
 
-Changing the secret invalidates every issued token: all users have to log in again.
+Changing the secret invalidates every issued access token; the refresh tokens do not depend on it
+and get new access tokens.
+
+A deployment sets `DROSO_AUTH_ALLOWED_ORIGINS` to the origin of its frontend, e.g.
+`https://droso.example.com`. An invalid entry (a path, a trailing slash, `*`) stops the start-up.
 
 The registration never creates an administrator. On every start-up, if no active user has the role
 `ADMIN`:
@@ -626,6 +689,34 @@ SELECT id, email, role_code, left(password_hash, 15), token_version, deleted_at,
 `UPDATE users SET token_version = token_version + 1` makes the next request with the token answer
 `401`; so does `deleted_at = now()`. `/me` lists `"permissions":["DEFECT_READ","DEFECT_CREATE"]`;
 after `UPDATE users SET role_code = 'MANAGER'` the same token lists `DEFECT_UPDATE` too.
+
+### Refreshing and logging out
+
+A cookie jar plays the browser; `Origin` is the one of the development server of the frontend:
+
+```bash
+curl -i -c jar -X POST http://localhost:8080/api/v1/auth/login   -H "Content-Type: application/json"   -d '{"email": "qwe.qwe+1@gmail.com", "password": "Sup3r-Secret!"}'
+curl -i -b jar -c jar -X POST http://localhost:8080/api/v1/auth/refresh   -H "Origin: http://localhost:4200"
+```
+
+The login sets `droso_refresh` (`HttpOnly; Secure; SameSite=Strict`); the refresh answers `200`
+with a new access token and a new cookie. Then:
+
+* the refresh without `-H "Origin: ..."`, or with `Origin: https://evil.example.com`, answers
+  `403 FORBIDDEN`;
+* `cp jar old` before a refresh and `curl -b old ...` after it: `401 INVALID_REFRESH_TOKEN`, and
+  the current cookie of `jar` fails as well (the family is revoked; the log warns
+  `A revoked refresh token of user ... was presented again`);
+* `curl -i -b jar -c jar -X POST http://localhost:8080/api/v1/auth/logout -H "Origin: http://localhost:4200"`
+  answers `204` and deletes the cookie;
+* `curl -i -X POST http://localhost:8080/api/v1/auth/logout-all -H "Authorization: Bearer $TOKEN"`
+  answers `204`, and the same token answers `401` afterwards.
+
+```sql
+SELECT id, user_id, family_id, token_version, expires_at, family_expires_at, revoked_at, created_at FROM refresh_tokens;
+```
+
+### The first administrator
 
 To get an administrator, start the application once with `DROSO_BOOTSTRAP_ADMIN_EMAIL=admin@example.com`
 and `DROSO_BOOTSTRAP_ADMIN_PASSWORD=Adm1n-Secret!` on a database without one: the log says

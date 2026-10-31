@@ -40,8 +40,9 @@ public class User {
     private Role role;
 
     /**
-     * The version of the access tokens: a token is valid only while its claim {@code ver} equals
-     * it, so incrementing it revokes every token issued before. Starts at 0 ({@code V5}).
+     * The version of the tokens: an access token is valid only while its claim {@code ver} equals
+     * it, a refresh token only while its column {@code token_version} does, so incrementing it
+     * revokes every token issued before. Starts at 0 ({@code V5}).
      */
     @Column(name = "token_version", nullable = false)
     private int tokenVersion;
@@ -121,7 +122,7 @@ public class User {
     }
 
     /**
-     * Soft-deletes the user and revokes every access token issued so far, so that the user is
+     * Soft-deletes the user and revokes every access and refresh token issued so far, so that the user is
      * logged out at once rather than when the tokens expire. The row stays, and the email becomes
      * free for a new registration.
      *
@@ -131,6 +132,17 @@ public class User {
     public void delete(Instant now) {
         requireActive();
         this.deletedAt = now.truncatedTo(ChronoUnit.MICROS);
+        this.tokenVersion++;
+    }
+
+    /**
+     * Revokes every access token and every refresh token issued so far: the user is logged out
+     * everywhere with the next request, and has to log in again.
+     *
+     * @throws IllegalStateException if the user is deleted
+     */
+    public void revokeTokens() {
+        requireActive();
         this.tokenVersion++;
     }
 

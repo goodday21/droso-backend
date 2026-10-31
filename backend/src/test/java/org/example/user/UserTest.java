@@ -77,6 +77,20 @@ class UserTest {
     }
 
     @Test
+    @DisplayName("revoking the tokens increments the token version; a deleted user cannot do it")
+    void revokeTokens() {
+        User user = new User("a@b.cd", HASH, Role.USER);
+
+        user.revokeTokens();
+        user.revokeTokens();
+        assertThat(user.getTokenVersion()).isEqualTo(2);
+
+        user.delete(Instant.now());
+        assertThatThrownBy(user::revokeTokens).isInstanceOf(IllegalStateException.class);
+        assertThat(user.getTokenVersion()).isEqualTo(3);
+    }
+
+    @Test
     @DisplayName("the timestamps are equal on creation, the update time moves on a change")
     void timestamps() throws InterruptedException {
         User user = new User("a@b.cd", HASH, Role.USER);

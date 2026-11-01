@@ -1,0 +1,13 @@
+-- The list of the users can be sorted by the email (GET /api/v1/users?sort=email).
+--
+-- With the collation of the database (e.g. en_US.UTF-8 or ru_RU.UTF-8 of glibc, or ICU) the
+-- punctuation counts only at a later level of comparison, so "a.b@x.com", "ab@x.com" and
+-- "a-c@x.com" would not come in the alphabetical order, and the order would differ between servers
+-- with different locales. "C" compares the bytes: the addresses are lower-case ASCII
+-- (users_email_lower_case_check and the rules of the application), so that is the alphabetical
+-- order everywhere.
+--
+-- The values stay as they are, and so does the uniqueness: "C" is deterministic, and two
+-- lower-case addresses are equal under it exactly when they were equal before. PostgreSQL rebuilds
+-- users_email_active_key with the new collation, so the index can also serve the order.
+ALTER TABLE users ALTER COLUMN email TYPE VARCHAR(254) COLLATE "C";

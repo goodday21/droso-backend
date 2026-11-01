@@ -229,6 +229,19 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    @DisplayName("the email has the collation C, so that the list sorted by email is alphabetical on every server")
+    void usersEmailCollation() {
+        // The test servers are created under LC_ALL=C, where the default order is the same: only the
+        // collation of the column shows that a server with another locale sorts the same way.
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+
+        assertThat(jdbc.queryForObject("""
+                SELECT collation_name FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'email'
+                """, String.class)).isEqualTo("C");
+    }
+
+    @Test
     @DisplayName("the roles table holds exactly the values of the Role enum")
     void rolesMatchTheEnum() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);

@@ -125,16 +125,16 @@ class UserManagementServiceTest {
     }
 
     @Test
-    @DisplayName("the list asks for the requested page of the active users, sorted by id")
+    @DisplayName("the list asks for the requested page of the active users, in the requested order")
     void list() {
         when(repository.findByDeletedAtIsNull(org.mockito.ArgumentMatchers.any())).thenReturn(Page.empty());
 
-        service.list(2, 50);
+        service.list(2, 50, UserSort.ROLE, Sort.Direction.ASC);
 
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
         verify(repository).findByDeletedAtIsNull(pageable.capture());
         assertThat(pageable.getValue().getPageNumber()).isEqualTo(2);
         assertThat(pageable.getValue().getPageSize()).isEqualTo(50);
-        assertThat(pageable.getValue().getSort()).isEqualTo(Sort.by("id"));
+        assertThat(pageable.getValue().getSort()).isEqualTo(UserSort.ROLE.toSort(Sort.Direction.ASC));
     }
 }

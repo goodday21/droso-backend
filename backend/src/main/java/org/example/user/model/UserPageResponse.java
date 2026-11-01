@@ -11,7 +11,7 @@ import org.springframework.data.domain.Page;
  * <p>A record of its own rather than Spring Data's {@code Page}, whose JSON form is not a stable
  * contract (Spring Data itself warns against serializing it).
  *
- * @param items         the users of the page, sorted by id
+ * @param items         the users of the page, in the requested order
  * @param page          the number of the page, from 0
  * @param size          the requested size of a page
  * @param totalElements the number of active users

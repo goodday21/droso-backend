@@ -32,10 +32,11 @@ public class UserManagementService {
         this.clock = clock;
     }
 
-    /** One page of the active users, sorted by id. */
+    /** One page of the active users, in the order of {@link UserSort#toSort}. */
     @Transactional(readOnly = true)
-    public UserPageResponse list(int page, int size) {
-        return UserPageResponse.of(repository.findByDeletedAtIsNull(PageRequest.of(page, size, Sort.by("id"))));
+    public UserPageResponse list(int page, int size, UserSort sort, Sort.Direction direction) {
+        return UserPageResponse.of(
+                repository.findByDeletedAtIsNull(PageRequest.of(page, size, sort.toSort(direction))));
     }
 
     /**

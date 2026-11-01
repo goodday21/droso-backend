@@ -111,7 +111,7 @@ class UserManagementIntegrationTest extends PostgresIntegrationTest {
     // ---------------------------------------------------------------- list
 
     @Test
-    @DisplayName("the list answers a page of the active users sorted by id, without the deleted ones")
+    @DisplayName("by default the list answers a page of the active users, newest first, without the deleted ones")
     void list() throws Exception {
         User first = TestUsers.create(users, Role.USER);
         User deleted = TestUsers.create(users, Role.MANAGER);
@@ -121,9 +121,9 @@ class UserManagementIntegrationTest extends PostgresIntegrationTest {
         mockMvc.perform(get(URL).with(authorization(bearer)).param("page", "0").param("size", "2"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.items[*].id", Matchers.contains(admin.getId().intValue(), first.getId().intValue())))
-                .andExpect(jsonPath("$.items[0].email").value("admin@example.com"))
-                .andExpect(jsonPath("$.items[0].role").value("ADMIN"))
+                .andExpect(jsonPath("$.items[*].id", Matchers.contains(last.getId().intValue(), first.getId().intValue())))
+                .andExpect(jsonPath("$.items[0].email").value(last.getEmail()))
+                .andExpect(jsonPath("$.items[0].role").value("MANAGER"))
                 .andExpect(jsonPath("$.items[0].createdAt").isString())
                 .andExpect(jsonPath("$.items[0].*", Matchers.hasSize(4)))
                 .andExpect(jsonPath("$.page").value(0))
@@ -134,7 +134,55 @@ class UserManagementIntegrationTest extends PostgresIntegrationTest {
 
         mockMvc.perform(get(URL).with(authorization(bearer)).param("page", "1").param("size", "2"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[*].id", Matchers.contains(last.getId().intValue())));
+                .andExpect(jsonPath("$.items[*].id", Matchers.contains(admin.getId().intValue())));
+    }
+
+    @Test
+    @DisplayName("sorted by email, the list follows the bytes, punctuation included, whatever the locale of the database")
+    void listByEmail() throws Exception {
+        // Under en_US or ru_RU the punctuation would count last: a.b, ab, a-c, admin.
+        TestUsers.create(users, "ab@example.com", Role.USER);
+        TestUsers.create(users, "a.b@example.com", Role.USER);
+        TestUsers.create(users, "a-c@example.com", Role.USER);
+
+        mockMvc.perform(get(URL).with(authorization(bearer)).param("sort", "email").param("direction", "asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].email", Matchers.contains(
+                        "a-c@example.com", "a.b@example.com", "ab@example.com", "admin@example.com")));
+        mockMvc.perform(get(URL).with(authorization(bearer)).param("sort", "email"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].email", Matchers.contains(
+                        "admin@example.com", "ab@example.com", "a.b@example.com", "a-c@example.com")));
+    }
+
+    @Test
+    @DisplayName("sorted by role, the list orders the codes alphabetically and equal roles by id in the same direction")
+    void listByRole() throws Exception {
+        User user1 = TestUsers.create(users, Role.USER);
+        User manager = TestUsers.create(users, Role.MANAGER);
+        User user2 = TestUsers.create(users, Role.USER);
+
+        mockMvc.perform(get(URL).with(authorization(bearer)).param("sort", "role").param("direction", "asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].id", Matchers.contains(admin.getId().intValue(),
+                        manager.getId().intValue(), user1.getId().intValue(), user2.getId().intValue())));
+        mockMvc.perform(get(URL).with(authorization(bearer)).param("sort", "role").param("direction", "desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].id", Matchers.contains(user2.getId().intValue(),
+                        user1.getId().intValue(), manager.getId().intValue(), admin.getId().intValue())));
+    }
+
+    @Test
+    @DisplayName("a field or a direction of the order not spelled in lower case answers 400 VALIDATION_ERROR")
+    void listInvalidOrder() throws Exception {
+        assertBody(mockMvc.perform(get(URL).with(authorization(bearer)).param("sort", "Email"))
+                        .andExpect(status().isBadRequest()),
+                "{\"status\":400,\"code\":\"VALIDATION_ERROR\",\"message\":\"Request validation failed\","
+                        + "\"fieldErrors\":{\"sort\":\"has an invalid value\"}}");
+        assertBody(mockMvc.perform(get(URL).with(authorization(bearer)).param("direction", "ASC"))
+                        .andExpect(status().isBadRequest()),
+                "{\"status\":400,\"code\":\"VALIDATION_ERROR\",\"message\":\"Request validation failed\","
+                        + "\"fieldErrors\":{\"direction\":\"has an invalid value\"}}");
     }
 
     @Test

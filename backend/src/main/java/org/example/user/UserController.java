@@ -7,6 +7,8 @@ import org.example.user.model.ChangeRoleRequest;
 import org.example.user.model.UserPageResponse;
 import org.example.user.model.UserResponse;
 import org.example.web.CanonicalIdEditor;
+import org.example.web.LowerCaseEnumEditor;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -46,21 +48,31 @@ public class UserController {
         this.service = service;
     }
 
-    /** The ids of the URLs in their canonical form only; see {@link CanonicalIdEditor}. */
+    /**
+     * The ids of the URLs in their canonical form only ({@link CanonicalIdEditor}); the field and the
+     * direction of the order in lower case only ({@link LowerCaseEnumEditor}).
+     */
     @InitBinder
     void initBinder(WebDataBinder binder) {
         binder.registerCustomEditor(Long.class, new CanonicalIdEditor());
+        binder.registerCustomEditor(UserSort.class, new LowerCaseEnumEditor<>(UserSort.class));
+        binder.registerCustomEditor(Sort.Direction.class, new LowerCaseEnumEditor<>(Sort.Direction.class));
     }
 
     /**
-     * Answers {@code 200 OK} with a page of the active users, sorted by id. {@code page} counts from
-     * 0, {@code size} is 1..100; a value outside answers {@code 400 VALIDATION_ERROR}.
+     * Answers {@code 200 OK} with a page of the active users. {@code page} counts from 0,
+     * {@code size} is 1..100. {@code sort} is {@code id} (default), {@code email} or {@code role},
+     * {@code direction} is {@code asc} or {@code desc} (default, also when only {@code sort} is
+     * given): without parameters the newest users come first. A value outside answers
+     * {@code 400 VALIDATION_ERROR}.
      */
     @GetMapping
     @PreAuthorize("hasAuthority('USER_MANAGE')")
     public UserPageResponse list(@RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(MAX_PAGE_SIZE) int size) {
-        return service.list(page, size);
+            @RequestParam(defaultValue = "20") @Min(1) @Max(MAX_PAGE_SIZE) int size,
+            @RequestParam(defaultValue = "id") UserSort sort,
+            @RequestParam(defaultValue = "desc") Sort.Direction direction) {
+        return service.list(page, size, sort, direction);
     }
 
     /**

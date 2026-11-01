@@ -21,8 +21,10 @@ Guidance for Claude Code in this repository. The user-facing documentation is
     `users_email_active_key`), the rules `EmailAddress` and `PasswordPolicy`, their constraints
     `@ValidEmail`/`@ValidPassword` in `user.validation`; `UserResponse`, `CurrentUserResponse`
     (`/me`, with the permissions) in `user.model`. `UserController` + `UserManagementService`
-    (`USER_MANAGE`): `GET /api/v1/users` (page 0.., size 1..100), `PUT /api/v1/users/{id}/role`,
-    `DELETE /api/v1/users/{id}`; a deleted user is 404 everywhere; the last active admin cannot be
+    (`USER_MANAGE`): `GET /api/v1/users` (page 0.., size 1..100,
+    `sort` = `UserSort` `id`|`email`|`role`, `direction` `asc`|`desc`, default `id desc`, ties by
+    id; lower case only via `LowerCaseEnumEditor`; `users.email` has `COLLATE "C"`),
+    `PUT /api/v1/users/{id}/role`, `DELETE /api/v1/users/{id}`; a deleted user is 404 everywhere; the last active admin cannot be
     demoted or deleted (`LastAdminException` → 409 `LAST_ADMIN`). Every change locks the active
     admins (`lockActiveAdmins`, ordered by id) and then the user row (`lockById`), in that order:
     a count without locks lets two admins demote each other, and without the row lock a concurrent
@@ -54,6 +56,8 @@ Guidance for Claude Code in this repository. The user-facing documentation is
   - `text` — `InvisibleText`.
   - `web` — `CanonicalIdEditor`: ids of URLs in canonical decimal form only (Spring's default
     conversion would read `0x1A`, `026`, `+26` as 26); register it with `@InitBinder` per controller.
+    `LowerCaseEnumEditor`: an enum query parameter spelled as its lower-case name only (the default
+    conversion wants upper case and trims); also per controller.
   - `web.error` — `ApiExceptionHandler`, `ApiError`, `ErrorCode`, `ResourceNotFoundException`.
 - `src/test/java/org/example/tools` holds the local database launcher (`PostgresLauncher`,
   `LocalDatabaseConfig`); it is not test code, it lives there to use the test dependencies.

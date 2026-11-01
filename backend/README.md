@@ -353,8 +353,8 @@ least one active administrator: demoting or deleting the last one answers **HTTP
 `LAST_ADMIN` and changes nothing, also when two administrators demote or delete each other at the
 same moment (the server serializes such changes).
 
-**`GET /api/v1/users?page=0&size=20`** answers **HTTP 200** with a page of the active users, sorted
-by id:
+**`GET /api/v1/users?page=0&size=20&sort=id&direction=desc`** answers **HTTP 200** with a page of
+the active users, by default the newest first:
 
 ```json
 {
@@ -371,6 +371,19 @@ by id:
 `page` counts from 0 (default 0), `size` is 1..100 (default 20). A value outside answers
 `400 VALIDATION_ERROR` (e.g. `"fieldErrors": {"size": "must be less than or equal to 100"}`)
 rather than being cut silently; a page past the end has no items.
+
+| Parameter   | Values                     | Default |
+|-------------|----------------------------|---------|
+| `sort`      | `id`, `email`, `role`      | `id`    |
+| `direction` | `asc`, `desc`              | `desc`  |
+
+`direction` defaults to `desc` also when only `sort` is given. The email is ordered alphabetically
+byte by byte, punctuation included (`a-c@…` < `a.b@…` < `ab@…`), on every server: the column has
+the collation `C`. The role is ordered alphabetically by its code (`ADMIN` < `MANAGER` < `USER`),
+not by its permissions. Users with an equal value follow by id in the same direction, so that the
+pages neither repeat nor skip a user. The values are spelled in lower case only: anything else
+(`Email`, `ASC`, `name`) answers `400 VALIDATION_ERROR` with
+`"fieldErrors": {"sort": "has an invalid value"}` (or `direction`).
 
 **`PUT /api/v1/users/{id}/role`** with `{"role": "MANAGER"}` answers **HTTP 200** with the user
 (as in the list). The same role changes nothing. The user stays logged in: the permissions of the
@@ -764,12 +777,13 @@ With the token of an administrator (see the bootstrap above) in `$ADMIN_TOKEN`:
 
 ```bash
 curl -i "http://localhost:8080/api/v1/users?size=10" -H "Authorization: Bearer $ADMIN_TOKEN"
+curl -i "http://localhost:8080/api/v1/users?sort=email&direction=asc" -H "Authorization: Bearer $ADMIN_TOKEN"
 curl -i -X PUT http://localhost:8080/api/v1/users/2/role -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" -d '{"role": "MANAGER"}'
 curl -i -X DELETE http://localhost:8080/api/v1/users/2 -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-`200` with the page, `200` with `"role":"MANAGER"`, `204`. Afterwards the token of the user 2
+`200` with the page (the second sorted by email), `200` with `"role":"MANAGER"`, `204`. Afterwards the token of the user 2
 answers `401`, and the row has `deleted_at` set and `token_version` incremented. Demoting or
 deleting the only administrator answers `409 LAST_ADMIN`; the same requests with the token of a
 `USER` answer `403 FORBIDDEN`.

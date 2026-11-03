@@ -41,7 +41,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 class DefectPermissionIntegrationTest extends PostgresIntegrationTest {
 
     private static final CreateDefectRequest REQUEST =
-            new CreateDefectRequest("Login fails", null, null, null, null, null);
+            new CreateDefectRequest("Login fails", null, null, null, null, null, null);
 
     @Autowired
     private DefectController controller;

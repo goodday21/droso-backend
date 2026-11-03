@@ -9,13 +9,14 @@ import static org.example.defect.Defect.TITLE_MIN_LENGTH;
 
 import jakarta.validation.constraints.NotBlank;
 import org.example.defect.DefectPriority;
+import org.example.defect.DefectType;
 import org.example.text.InvisibleText;
 import org.hibernate.validator.constraints.CodePointLength;
 
 /**
  * Request body of {@code POST /api/v1/defects}.
  *
- * <p>The client sets the content of the defect only: the id, the status and the timestamps are
+ * <p>The client sets the content of the defect only: the id, the status, the author and the timestamps are
  * chosen by the server. Since unknown JSON properties are rejected
  * ({@code spring.jackson.deserialization.fail-on-unknown-properties}), a request that tries to set
  * them answers {@code 400} instead of being silently ignored.
@@ -34,6 +35,7 @@ import org.hibernate.validator.constraints.CodePointLength;
  * @param expectedResult   optional, at most 2000 characters; as {@code description}
  * @param actualResult     optional, at most 2000 characters; as {@code description}
  * @param priority         optional; {@link DefectPriority#MEDIUM} when absent or {@code null}
+ * @param type             optional; {@link DefectType#FEATURE} when absent or {@code null}
  */
 public record CreateDefectRequest(
         @NotBlank @CodePointLength(min = TITLE_MIN_LENGTH, max = TITLE_MAX_LENGTH) String title,
@@ -41,7 +43,8 @@ public record CreateDefectRequest(
         @CodePointLength(max = STEPS_TO_REPRODUCE_MAX_LENGTH) String stepsToReproduce,
         @CodePointLength(max = EXPECTED_RESULT_MAX_LENGTH) String expectedResult,
         @CodePointLength(max = ACTUAL_RESULT_MAX_LENGTH) String actualResult,
-        DefectPriority priority) {
+        DefectPriority priority,
+        DefectType type) {
 
     /**
      * Normalizes the text before it is validated, so that the rules apply to the values as they

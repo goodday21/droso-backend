@@ -18,7 +18,8 @@ import org.example.text.InvisibleText;
  * A defect reported by a user. The table is created by the migration {@code V2__create_defects.sql}.
  *
  * <p>A new defect always has the status {@link DefectStatus#NEW}; its priority defaults to
- * {@link DefectPriority#MEDIUM}. Both timestamps are set by the application when the defect is
+ * {@link DefectPriority#MEDIUM}, its type to {@link DefectType#FEATURE}. A defect is soft-deleted:
+ * {@code deletedAt} is set and the row stays, and a deleted defect is absent for the API. Both timestamps are set by the application when the defect is
  * persisted for the first time.
  */
 @Entity
@@ -61,6 +62,10 @@ public class Defect {
     @Column(name = "status", nullable = false, length = 16)
     private DefectStatus status = DefectStatus.NEW;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type", nullable = false, length = 16)
+    private DefectType type = DefectType.FEATURE;
+
     /**
      * The id of the user who reported the defect; {@code null} for the defects created before the
      * authors were recorded ({@code V6}). An id rather than a relation to {@code User}: the defect
@@ -75,6 +80,10 @@ public class Defect {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** {@code null} while the defect is active. Nothing sets it yet: there is no deletion. */
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
     /** Required by JPA. */
     protected Defect() {
     }
@@ -87,11 +96,12 @@ public class Defect {
      * @param expectedResult   optional; as {@code description}
      * @param actualResult     optional; as {@code description}
      * @param priority         optional; {@link DefectPriority#MEDIUM} when {@code null}
+     * @param type             optional; {@link DefectType#FEATURE} when {@code null}
      * @param createdBy        required; the id of the user who reports the defect
      * @throws IllegalArgumentException if the title violates its length rule or the author is missing
      */
     public Defect(String title, String description, String stepsToReproduce, String expectedResult,
-            String actualResult, DefectPriority priority, Long createdBy) {
+            String actualResult, DefectPriority priority, DefectType type, Long createdBy) {
         this.title = normalizeTitle(title);
         this.description = InvisibleText.blankToNull(description);
         this.stepsToReproduce = InvisibleText.blankToNull(stepsToReproduce);
@@ -99,6 +109,9 @@ public class Defect {
         this.actualResult = InvisibleText.blankToNull(actualResult);
         if (priority != null) {
             this.priority = priority;
+        }
+        if (type != null) {
+            this.type = type;
         }
         if (createdBy == null) {
             throw new IllegalArgumentException("The author is required");
@@ -164,6 +177,10 @@ public class Defect {
         return status;
     }
 
+    public DefectType getType() {
+        return type;
+    }
+
     /** {@code null} only for a defect created before the authors were recorded. */
     public Long getCreatedBy() {
         return createdBy;
@@ -175,5 +192,14 @@ public class Defect {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    /** {@code null} while the defect is active. */
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public boolean isActive() {
+        return deletedAt == null;
     }
 }

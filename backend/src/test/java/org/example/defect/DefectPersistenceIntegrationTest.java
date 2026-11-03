@@ -17,6 +17,8 @@ import org.example.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -70,7 +72,7 @@ class DefectPersistenceIntegrationTest extends PostgresIntegrationTest {
         Instant before = Instant.now().truncatedTo(ChronoUnit.MICROS);
         Defect saved = persist(new Defect("  Login fails  ", "The login form rejects valid credentials",
                 "1. Open /login\n2. Enter valid credentials", "The dashboard opens",
-                "\"Invalid password\" is shown", DefectPriority.HIGH, author));
+                "\"Invalid password\" is shown", DefectPriority.HIGH, DefectType.BUG, author));
         Instant after = Instant.now();
 
         assertThat(saved.getId()).isNotNull();
@@ -86,6 +88,8 @@ class DefectPersistenceIntegrationTest extends PostgresIntegrationTest {
         assertThat(read.getActualResult()).isEqualTo("\"Invalid password\" is shown");
         assertThat(read.getPriority()).isEqualTo(DefectPriority.HIGH);
         assertThat(read.getStatus()).isEqualTo(DefectStatus.NEW);
+        assertThat(read.getType()).isEqualTo(DefectType.BUG);
+        assertThat(read.isActive()).isTrue();
         assertThat(read.getCreatedBy()).isEqualTo(author);
         assertThat(read.getCreatedAt()).isEqualTo(saved.getCreatedAt()).isBetween(before, after);
         assertThat(read.getUpdatedAt()).isEqualTo(read.getCreatedAt());
@@ -94,12 +98,14 @@ class DefectPersistenceIntegrationTest extends PostgresIntegrationTest {
     @Test
     @DisplayName("a defect with the required fields only gets the defaults and empty optional fields")
     void persistsTheDefaults() {
-        Defect saved = persist(new Defect("Crash on start", null, null, null, null, null, author));
+        Defect saved = persist(new Defect("Crash on start", null, null, null, null, null, null, author));
 
         Defect read = find(saved.getId());
 
         assertThat(read.getPriority()).isEqualTo(DefectPriority.MEDIUM);
         assertThat(read.getStatus()).isEqualTo(DefectStatus.NEW);
+        assertThat(read.getType()).isEqualTo(DefectType.FEATURE);
+        assertThat(read.getDeletedAt()).isNull();
         assertThat(read.getDescription()).isNull();
         assertThat(read.getStepsToReproduce()).isNull();
         assertThat(read.getExpectedResult()).isNull();
@@ -111,8 +117,8 @@ class DefectPersistenceIntegrationTest extends PostgresIntegrationTest {
     @Test
     @DisplayName("every defect gets its own id from the database")
     void idsAreGenerated() {
-        Long first = persist(new Defect("First defect", null, null, null, null, null, author)).getId();
-        Long second = persist(new Defect("Second defect", null, null, null, null, null, author)).getId();
+        Long first = persist(new Defect("First defect", null, null, null, null, null, null, author)).getId();
+        Long second = persist(new Defect("Second defect", null, null, null, null, null, null, author)).getId();
 
         assertThat(first).isNotNull();
         assertThat(second).isNotNull().isNotEqualTo(first);
@@ -121,13 +127,15 @@ class DefectPersistenceIntegrationTest extends PostgresIntegrationTest {
     @Test
     @DisplayName("the enums are stored by name and the timestamps as the same absolute moment")
     void storageFormat() {
-        Defect saved = persist(new Defect("Stored by name", null, null, null, null, DefectPriority.CRITICAL, author));
+        Defect saved = persist(new Defect("Stored by name", null, null, null, null, DefectPriority.CRITICAL, DefectType.BUG, author));
 
         Map<String, Object> row = jdbc.queryForMap(
-                "SELECT priority, status, created_by FROM defects WHERE id = ?", saved.getId());
+                "SELECT priority, status, type, created_by, deleted_at FROM defects WHERE id = ?", saved.getId());
 
         assertThat(row.get("priority")).isEqualTo("CRITICAL");
         assertThat(row.get("status")).isEqualTo("NEW");
+        assertThat(row.get("type")).isEqualTo("BUG");
+        assertThat(row.get("deleted_at")).isNull();
         assertThat(row.get("created_by")).isEqualTo(author);
         // Read with plain JDBC, independently of the mapping of Hibernate.
         assertThat(jdbc.queryForObject("SELECT created_at FROM defects WHERE id = ?",
@@ -136,10 +144,34 @@ class DefectPersistenceIntegrationTest extends PostgresIntegrationTest {
                 OffsetDateTime.class, saved.getId()).toInstant()).isEqualTo(saved.getUpdatedAt());
     }
 
+    /**
+     * The CHECK constraints of V9 must list every value of the enums: a value missing there would be
+     * accepted by the application and fail only when it is first stored.
+     */
+    @ParameterizedTest
+    @EnumSource(DefectStatus.class)
+    @DisplayName("the database accepts every status of DefectStatus, read back by Hibernate")
+    void everyStatusIsStored(DefectStatus status) {
+        long id = persist(new Defect("Status " + status, null, null, null, null, null, null, author)).getId();
+
+        jdbc.update("UPDATE defects SET status = ? WHERE id = ?", status.name(), id);
+
+        assertThat(find(id).getStatus()).isEqualTo(status);
+    }
+
+    @ParameterizedTest
+    @EnumSource(DefectType.class)
+    @DisplayName("the database accepts every type of DefectType")
+    void everyTypeIsStored(DefectType type) {
+        long id = persist(new Defect("Type " + type, null, null, null, null, null, type, author)).getId();
+
+        assertThat(find(id).getType()).isEqualTo(type);
+    }
+
     @Test
     @DisplayName("an author that is not a stored user is rejected by the foreign key")
     void unknownAuthorIsRejected() {
-        Defect defect = new Defect("Orphan defect", null, null, null, null, null, author + 1000);
+        Defect defect = new Defect("Orphan defect", null, null, null, null, null, null, author + 1000);
 
         assertThatThrownBy(() -> persist(defect))
                 .isInstanceOf(PersistenceException.class)
@@ -149,7 +181,7 @@ class DefectPersistenceIntegrationTest extends PostgresIntegrationTest {
     @Test
     @DisplayName("an optional field longer than its column is rejected by the database")
     void tooLongOptionalFieldIsRejected() {
-        Defect defect = new Defect("Too long description", "a".repeat(2001), null, null, null, null, author);
+        Defect defect = new Defect("Too long description", "a".repeat(2001), null, null, null, null, null, author);
 
         assertThatThrownBy(() -> persist(defect))
                 .isInstanceOf(PersistenceException.class)

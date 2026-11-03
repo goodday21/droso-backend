@@ -80,6 +80,7 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
         long id = insert("Profile changes are not saved", "Изменения теряются", "1. Open\n2. Save",
                 "Saved", "Not saved 😀", "CRITICAL",
                 "2026-01-02T03:04:05.123456Z", "2026-03-04T05:06:07.654321Z");
+        jdbc.update("UPDATE defects SET type = 'BUG', status = 'WAITING_FOR_FIX' WHERE id = ?", id);
 
         mockMvc.perform(get(URL + "/{id}", id).with(authorization(bearer)))
                 .andExpect(status().isOk())
@@ -91,11 +92,12 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.expectedResult").value("Saved"))
                 .andExpect(jsonPath("$.actualResult").value("Not saved 😀"))
                 .andExpect(jsonPath("$.priority").value("CRITICAL"))
-                .andExpect(jsonPath("$.status").value("NEW"))
+                .andExpect(jsonPath("$.status").value("WAITING_FOR_FIX"))
+                .andExpect(jsonPath("$.type").value("BUG"))
                 .andExpect(jsonPath("$.createdAt").value("2026-01-02T03:04:05.123456Z"))
                 .andExpect(jsonPath("$.updatedAt").value("2026-03-04T05:06:07.654321Z"))
                 .andExpect(jsonPath("$.createdBy").value(Matchers.nullValue()))
-                .andExpect(jsonPath("$.*", Matchers.hasSize(11)));
+                .andExpect(jsonPath("$.*", Matchers.hasSize(12)));
     }
 
     @Test
@@ -123,7 +125,7 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.stepsToReproduce").value(Matchers.nullValue()))
                 .andExpect(jsonPath("$.expectedResult").value(Matchers.nullValue()))
                 .andExpect(jsonPath("$.actualResult").value(Matchers.nullValue()))
-                .andExpect(jsonPath("$.*", Matchers.hasSize(11)));
+                .andExpect(jsonPath("$.*", Matchers.hasSize(12)));
     }
 
     @Test
@@ -231,14 +233,26 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("a deleted defect is not found any more")
-    void deletedDefect() throws Exception {
+    @DisplayName("a removed row is not found any more")
+    void removedDefect() throws Exception {
         long id = insert("Crash on start", null, null, null, null, "HIGH", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z");
         jdbc.update("DELETE FROM defects WHERE id = ?", id);
 
         mockMvc.perform(get(URL + "/{id}", id).with(authorization(bearer)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("a soft-deleted defect answers 404 RESOURCE_NOT_FOUND, although its row stays")
+    void softDeletedDefect() throws Exception {
+        long id = insert("Crash on start", null, null, null, null, "HIGH", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z");
+        jdbc.update("UPDATE defects SET deleted_at = now() WHERE id = ?", id);
+
+        mockMvc.perform(get(URL + "/{id}", id).with(authorization(bearer)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+        assertThat(count()).isEqualTo(1);
     }
 
     // ---------------------------------------------------------------- invalid id

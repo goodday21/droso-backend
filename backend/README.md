@@ -155,13 +155,13 @@ This section is the source of truth of the contract: the frontend model
 | `stepsToReproduce` | Optional, at most 5000 characters                                            |
 | `expectedResult`   | Optional, at most 2000 characters                                            |
 | `actualResult`     | Optional, at most 2000 characters                                            |
+| `priority`         | Optional: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL` (exact case); `MEDIUM` when absent or `null` |
+| `type`             | Optional: `FEATURE`, `BUG` (exact case); `FEATURE` when absent or `null`      |
 
 *Invisible* are the whitespace, the no-break spaces (U+00A0, U+2007, U+202F) and the other space
 separators, and the zero-width characters (U+200B, U+200C, U+200D, U+2060, U+FEFF, …): a title of
 five no-break spaces is blank. An optional field that is invisible as a whole is stored as `null`;
 any other is stored exactly as sent, its surrounding whitespace and line breaks included.
-| `priority`         | Optional: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL` (exact case); `MEDIUM` when absent or `null` |
-| `type`             | Optional: `FEATURE`, `BUG` (exact case); `FEATURE` when absent or `null`      |
 
 Lengths are counted in characters (Unicode code points), as by the `VARCHAR` columns: an emoji is
 one character.

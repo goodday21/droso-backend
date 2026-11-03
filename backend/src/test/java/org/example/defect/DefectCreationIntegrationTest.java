@@ -95,7 +95,8 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
                           "stepsToReproduce": "1. Открыть профиль\\n2. Изменить имя\\n3. Нажать Сохранить",
                           "expectedResult": "Изменённое имя сохранено",
                           "actualResult": "Отображается старое имя",
-                          "priority": "HIGH"
+                          "priority": "HIGH",
+                          "type": "BUG"
                         }
                         """))
                 .andExpect(status().isCreated())
@@ -108,8 +109,9 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.actualResult").value("Отображается старое имя"))
                 .andExpect(jsonPath("$.priority").value("HIGH"))
                 .andExpect(jsonPath("$.status").value("NEW"))
+                .andExpect(jsonPath("$.type").value("BUG"))
                 .andExpect(jsonPath("$.createdBy").value(author))
-                .andExpect(jsonPath("$.*", Matchers.hasSize(11)))
+                .andExpect(jsonPath("$.*", Matchers.hasSize(12)))
                 .andReturn().getResponse().getContentAsString();
         Instant after = Instant.now();
 
@@ -127,6 +129,8 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
         assertThat(row.get("actual_result")).isEqualTo("Отображается старое имя");
         assertThat(row.get("priority")).isEqualTo("HIGH");
         assertThat(row.get("status")).isEqualTo("NEW");
+        assertThat(row.get("type")).isEqualTo("BUG");
+        assertThat(row.get("deleted_at")).isNull();
         assertThat(row.get("created_by")).isEqualTo(author);
         assertThat(timestamp("created_at", id)).isEqualTo(createdAt);
         assertThat(timestamp("updated_at", id)).isEqualTo(updatedAt);
@@ -142,25 +146,27 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("a request with the title only gets MEDIUM, NEW, empty optional fields and equal timestamps")
+    @DisplayName("a request with the title only gets MEDIUM, NEW, FEATURE, empty optional fields and equal timestamps")
     void createsMinimalDefect() throws Exception {
         String body = body(create(Map.of("title", "Crash on start"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.title").value("Crash on start"))
                 .andExpect(jsonPath("$.priority").value("MEDIUM"))
                 .andExpect(jsonPath("$.status").value("NEW"))
+                .andExpect(jsonPath("$.type").value("FEATURE"))
                 // The optional fields are present in the response, as null.
                 .andExpect(jsonPath("$.description").value(Matchers.nullValue()))
                 .andExpect(jsonPath("$.stepsToReproduce").value(Matchers.nullValue()))
                 .andExpect(jsonPath("$.expectedResult").value(Matchers.nullValue()))
                 .andExpect(jsonPath("$.actualResult").value(Matchers.nullValue()))
                 .andExpect(jsonPath("$.createdBy").value(author))
-                .andExpect(jsonPath("$.*", Matchers.hasSize(11))));
+                .andExpect(jsonPath("$.*", Matchers.hasSize(12))));
 
         assertThat((String) JsonPath.read(body, "$.updatedAt")).isEqualTo(JsonPath.read(body, "$.createdAt"));
         Map<String, Object> row = jdbc.queryForMap("SELECT * FROM defects WHERE id = ?", id(body));
         assertThat(row.get("priority")).isEqualTo("MEDIUM");
         assertThat(row.get("status")).isEqualTo("NEW");
+        assertThat(row.get("type")).isEqualTo("FEATURE");
         assertThat(row.get("description")).isNull();
         assertThat(row.get("steps_to_reproduce")).isNull();
         assertThat(row.get("expected_result")).isNull();
@@ -173,6 +179,14 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
         create(fields("title", "Crash on start", "priority", null))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.priority").value("MEDIUM"));
+    }
+
+    @Test
+    @DisplayName("an explicit null type is FEATURE as well")
+    void nullTypeIsFeature() throws Exception {
+        create(fields("title", "Crash on start", "type", null))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.type").value("FEATURE"));
     }
 
     @ParameterizedTest
@@ -282,6 +296,22 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.fieldErrors.*", Matchers.hasSize(3))));
 
         assertThat(body).containsSubsequence("\"actualResult\"", "\"description\"", "\"title\"");
+        assertNothingStored();
+    }
+
+    // ---------------------------------------------------------------- type
+
+    /** One value per kind of error; the rules are those of any enum, pinned for the priority below. */
+    @ParameterizedTest
+    @ValueSource(strings = {"\"TASK\"", "\"bug\"", "1"})
+    @DisplayName("an unknown type, a lowercase one or an index is rejected")
+    void invalidTypeIsRejected(String type) throws Exception {
+        postJson("{\"title\": \"Crash on start\", \"type\": " + type + "}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors.type").value("has an invalid value"))
+                .andExpect(jsonPath("$.fieldErrors.*", Matchers.hasSize(1)));
+
         assertNothingStored();
     }
 

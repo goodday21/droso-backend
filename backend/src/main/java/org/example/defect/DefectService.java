@@ -28,23 +28,24 @@ public class DefectService {
     @Transactional
     public DefectResponse create(CreateDefectRequest request, long authorId) {
         Defect defect = new Defect(request.title(), request.description(), request.stepsToReproduce(),
-                request.expectedResult(), request.actualResult(), request.priority(), authorId);
+                request.expectedResult(), request.actualResult(), request.priority(), request.type(), authorId);
         // saveAndFlush: the INSERT runs here, so the id and the timestamps of the response are the
         // ones of the stored row, and a failure of the database surfaces inside this method.
         return DefectResponse.of(repository.saveAndFlush(defect));
     }
 
     /**
-     * Returns the stored defect with the given id.
+     * Returns the stored active defect with the given id; a deleted one is absent, as is a deleted
+     * user.
      *
      * <p>Read-only: Hibernate does not flush the session, and the connection is put into read-only
      * mode, so PostgreSQL itself refuses a write by mistake.
      *
-     * @throws ResourceNotFoundException if there is no defect with this id
+     * @throws ResourceNotFoundException if there is no active defect with this id
      */
     @Transactional(readOnly = true)
     public DefectResponse get(long id) {
-        return repository.findById(id)
+        return repository.findActiveById(id)
                 .map(DefectResponse::of)
                 .orElseThrow(() -> new ResourceNotFoundException("Defect", id));
     }

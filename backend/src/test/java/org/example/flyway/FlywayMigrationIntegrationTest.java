@@ -53,7 +53,7 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
         Integer failed = jdbc.queryForObject(
                 "SELECT count(*) FROM flyway_schema_history WHERE success = false", Integer.class);
 
-        assertThat(versions).contains("1", "2", "3", "4", "5", "6");
+        assertThat(versions).contains("1", "2", "3", "4", "5", "6", "7", "8", "9");
         assertThat(failed).isZero();
         assertThat(tableExists(jdbc, "demo_item")).isTrue();
         assertThat(tableExists(jdbc, "defects")).isTrue();
@@ -87,7 +87,9 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
                 "status character varying 16 NO NO",
                 "created_at timestamp with time zone null NO NO",
                 "updated_at timestamp with time zone null NO NO",
-                "created_by bigint null YES NO");
+                "created_by bigint null YES NO",
+                "type character varying 16 NO NO",
+                "deleted_at timestamp with time zone null YES NO");
     }
 
     @Test
@@ -108,23 +110,29 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("the defects table defaults the priority to MEDIUM and the status to NEW")
+    @DisplayName("the defects table defaults the priority to MEDIUM, the status to NEW, the type to FEATURE and keeps a defect active")
     void defectsDefaults() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
 
         Map<String, Object> row = jdbc.queryForMap("""
                 INSERT INTO defects (title, created_at, updated_at) VALUES ('Defaults', now(), now())
-                RETURNING priority, status
+                RETURNING priority, status, type, deleted_at
                 """);
 
         assertThat(row.get("priority")).isEqualTo("MEDIUM");
         assertThat(row.get("status")).isEqualTo("NEW");
+        assertThat(row.get("type")).isEqualTo("FEATURE");
+        assertThat(row.get("deleted_at")).isNull();
     }
 
     @ParameterizedTest
     @ValueSource(strings = {
             "INSERT INTO defects (title, priority, created_at, updated_at) VALUES ('Unknown', 'URGENT', now(), now())",
             "INSERT INTO defects (title, status, created_at, updated_at) VALUES ('Unknown', 'CLOSED', now(), now())",
+            "INSERT INTO defects (title, status, created_at, updated_at) VALUES ('Unknown', 'WAITING_FOR_FIXES', now(), now())",
+            "INSERT INTO defects (title, status, created_at, updated_at) VALUES ('Unknown', 'new', now(), now())",
+            "INSERT INTO defects (title, type, created_at, updated_at) VALUES ('Unknown', 'TASK', now(), now())",
+            "INSERT INTO defects (title, type, created_at, updated_at) VALUES ('Unknown', NULL, now(), now())",
             "INSERT INTO defects (title, created_at, updated_at) VALUES (NULL, now(), now())",
             "INSERT INTO defects (title, created_at, updated_at) VALUES (repeat('a', 121), now(), now())",
             "INSERT INTO defects (title, updated_at) VALUES ('No creation time', now())",
@@ -173,6 +181,25 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
 
         assertThat(tableExists(jdbc, "users")).isTrue();
         assertThat(jdbc.queryForList("SELECT title FROM defects", String.class)).containsExactly("Kept defect");
+    }
+
+    @Test
+    @DisplayName("the type and the soft deletion of the defects keep the stored defects as active features")
+    void upgradeAddsDefectTypeAndDeletion() throws Exception {
+        new JdbcTemplate(postgres().getPostgresDatabase()).execute("CREATE DATABASE upgrade_defect_type");
+        DataSource upgraded = postgres().getDatabase("postgres", "upgrade_defect_type");
+        JdbcTemplate jdbc = new JdbcTemplate(upgraded);
+
+        Flyway.configure().dataSource(upgraded).locations("classpath:db/migration").target("8").load().migrate();
+        jdbc.update("INSERT INTO defects (title, created_at, updated_at) VALUES ('Kept defect', now(), now())");
+
+        Flyway.configure().dataSource(upgraded).locations("classpath:db/migration").load().migrate();
+
+        Map<String, Object> row = jdbc.queryForMap("SELECT title, status, type, deleted_at FROM defects");
+        assertThat(row.get("title")).isEqualTo("Kept defect");
+        assertThat(row.get("status")).isEqualTo("NEW");
+        assertThat(row.get("type")).isEqualTo("FEATURE");
+        assertThat(row.get("deleted_at")).isNull();
     }
 
     @Test

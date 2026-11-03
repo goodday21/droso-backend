@@ -143,7 +143,8 @@ This section is the source of truth of the contract: the frontend model
   "stepsToReproduce": "1. Open the profile\n2. Change the name\n3. Click Save",
   "expectedResult": "The new name is saved",
   "actualResult": "The old name is shown",
-  "priority": "HIGH"
+  "priority": "HIGH",
+  "type": "BUG"
 }
 ```
 
@@ -160,6 +161,7 @@ separators, and the zero-width characters (U+200B, U+200C, U+200D, U+2060, U+FEF
 five no-break spaces is blank. An optional field that is invisible as a whole is stored as `null`;
 any other is stored exactly as sent, its surrounding whitespace and line breaks included.
 | `priority`         | Optional: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL` (exact case); `MEDIUM` when absent or `null` |
+| `type`             | Optional: `FEATURE`, `BUG` (exact case); `FEATURE` when absent or `null`      |
 
 Lengths are counted in characters (Unicode code points), as by the `VARCHAR` columns: an emoji is
 one character.
@@ -179,6 +181,7 @@ the token.
   "actualResult": "The old name is shown",
   "priority": "HIGH",
   "status": "NEW",
+  "type": "BUG",
   "createdBy": 3,
   "createdAt": "2026-10-27T09:15:30.123456Z",
   "updatedAt": "2026-10-27T09:15:30.123456Z"
@@ -189,6 +192,11 @@ Every field of the response is always present (`null` when not set). `id`, `stat
 `createdBy` (the id of the reporting user), `createdAt` and `updatedAt` (equal for a new defect) are
 chosen by the server. `createdBy` is `null` only for the defects created before the authors were
 recorded.
+
+`status` is one of `NEW`, `IN_DEVELOPMENT`, `IN_REVIEW`, `READY_FOR_QA`, `IN_QA`, `WAITING_FOR_FIX`,
+`READY_TO_RELEASE`, `RELEASED`, `DECLINED`. A new defect is always `NEW`; the API cannot change the
+status yet, and the transitions between the statuses are not defined yet. A client should be ready
+for every value of the list. The defects created before the type existed are `FEATURE`.
 
 **Unknown properties are rejected**, including `id`, `status`, `createdBy`, `createdAt` and `updatedAt`:
 `400 VALIDATION_ERROR` with `"fieldErrors": {"status": "is not allowed"}`. A client that sends them
@@ -203,7 +211,8 @@ Only the first unknown property is reported. An enum is not read from its index 
 **HTTP 200** with the stored defect, in the same format as the response of `POST` above. Nothing is
 written: the request runs in a read-only transaction.
 
-**HTTP 404** `RESOURCE_NOT_FOUND` if there is no defect with this id. The body names neither the
+**HTTP 404** `RESOURCE_NOT_FOUND` if there is no defect with this id, or it is deleted (defects are
+soft-deleted, `defects.deleted_at`; the API cannot delete one yet). The body names neither the
 resource nor the id.
 
 **HTTP 400** `VALIDATION_ERROR` with `"fieldErrors": {"id": "has an invalid value"}` if the id is not

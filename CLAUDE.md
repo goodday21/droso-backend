@@ -12,7 +12,7 @@ Guidance for Claude Code in this repository. The user-facing documentation is
 - The Angular frontend lives in its own repository, `droso-frontend` (cloned next to this one).
 - Packages under `org.example`:
   - `health` — `GET /api/v1/health` (200 UP / 503 DOWN, runs `SELECT 1`, touches no table).
-  - `defect` — JPA entity `Defect` with `DefectPriority` and `DefectStatus`, `DefectRepository`,
+  - `defect` — JPA entity `Defect` with `DefectPriority`, `DefectStatus` and `DefectType`, `DefectRepository`,
     `DefectService`, `DefectController` (`POST /api/v1/defects` needs `DEFECT_CREATE`,
     `GET /api/v1/defects/{id}` needs `DEFECT_READ`); DTOs in `defect.model`.
   - `user` — JPA entity `User` (table `users`), `Role` (`ADMIN`, `MANAGER`, `USER`; one per user)
@@ -84,8 +84,11 @@ PostgreSQL. Spring Boot 4 differs from 3 in ways that are easy to get wrong:
   value needs a migration replacing the constraint. Timestamps are `TIMESTAMPTZ` mapped to `Instant`.
 - `Defect`: the title is stripped and must be 5..120 code points (`IllegalArgumentException`
   otherwise); an optional text that is invisible as a whole is stored as `null`, any other is kept
-  as given; priority defaults to `MEDIUM`; status is always `NEW`; `@PrePersist` sets
-  `createdAt == updatedAt`, truncated to microseconds. No setters, no `@PreUpdate` yet.
+  as given; priority defaults to `MEDIUM`, type (`FEATURE`|`BUG`) to `FEATURE`; status is always
+  `NEW` on creation (the other values of `DefectStatus` exist, their transitions are not defined
+  yet; a name must fit `VARCHAR(16)`); `@PrePersist` sets `createdAt == updatedAt`, truncated to
+  microseconds. No setters, no `@PreUpdate` yet. Soft delete is `deleted_at` (nothing sets it yet):
+  every read of the API goes through `DefectRepository.findActiveById`, a deleted defect is 404.
 - "Stripped" and "blank" mean `InvisibleText`, never `String.strip()`/`isBlank()` alone: those miss
   the no-break spaces (U+00A0, U+2007, U+202F) and the zero-width characters. The DTO normalizes
   the same way before validation, so that the rules apply to the stored values.

@@ -43,17 +43,17 @@ class CreateDefectRequestTest {
     }
 
     private static CreateDefectRequest withTitle(String title) {
-        return new CreateDefectRequest(title, null, null, null, null, null);
+        return new CreateDefectRequest(title, null, null, null, null, null, null);
     }
 
     /** A valid request with {@code value} in the optional text field {@code field}. */
     private static CreateDefectRequest withField(String field, String value) {
         String title = "Crash on start";
         return switch (field) {
-            case "description" -> new CreateDefectRequest(title, value, null, null, null, null);
-            case "stepsToReproduce" -> new CreateDefectRequest(title, null, value, null, null, null);
-            case "expectedResult" -> new CreateDefectRequest(title, null, null, value, null, null);
-            case "actualResult" -> new CreateDefectRequest(title, null, null, null, value, null);
+            case "description" -> new CreateDefectRequest(title, value, null, null, null, null, null);
+            case "stepsToReproduce" -> new CreateDefectRequest(title, null, value, null, null, null, null);
+            case "expectedResult" -> new CreateDefectRequest(title, null, null, value, null, null, null);
+            case "actualResult" -> new CreateDefectRequest(title, null, null, null, value, null, null);
             default -> throw new IllegalArgumentException(field);
         };
     }

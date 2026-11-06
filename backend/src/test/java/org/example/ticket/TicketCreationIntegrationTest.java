@@ -1,4 +1,4 @@
-package org.example.defect;
+package org.example.ticket;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.example.support.TestUsers.authorization;
@@ -38,7 +38,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * {@code POST /api/v1/defects} through the whole application against a real PostgreSQL server
+ * {@code POST /api/v1/tickets} through the whole application against a real PostgreSQL server
  * whose schema was created by the Flyway migrations.
  *
  * <p>What was stored is read back with plain JDBC, independently of JPA and of the response. Every
@@ -46,8 +46,8 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-class DefectCreationIntegrationTest extends PostgresIntegrationTest {
-    private static final String URL = "/api/v1/defects";
+class TicketCreationIntegrationTest extends PostgresIntegrationTest {
+    private static final String URL = "/api/v1/tickets";
 
     /** One code point, two UTF-16 units. */
     private static final String EMOJI = "😀";
@@ -67,7 +67,7 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
     @Autowired
     private AccessTokenService tokens;
 
-    /** The id of the user who sends the requests, a USER (who may report defects). */
+    /** The id of the user who sends the requests, a USER (who may report tickets). */
     private long author;
 
     /** The header Authorization of that user. */
@@ -83,8 +83,8 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
     // ---------------------------------------------------------------- successful creation
 
     @Test
-    @DisplayName("a full request is stored and answered with 201, the stored defect and its Location")
-    void createsFullDefect() throws Exception {
+    @DisplayName("a full request is stored and answered with 201, the stored ticket and its Location")
+    void createsFullTicket() throws Exception {
         // createdAt is truncated to microseconds, the clock is not: an untruncated "before" may lie
         // inside the same microsecond, after the stored value.
         Instant before = Instant.now().truncatedTo(ChronoUnit.MICROS);
@@ -121,7 +121,7 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
         assertThat(createdAt).isBetween(before, after);
         assertThat(updatedAt).isEqualTo(createdAt);
 
-        Map<String, Object> row = jdbc.queryForMap("SELECT * FROM defects WHERE id = ?", id);
+        Map<String, Object> row = jdbc.queryForMap("SELECT * FROM tickets WHERE id = ?", id);
         assertThat(row.get("title")).isEqualTo("Ошибка при сохранении профиля");
         assertThat(row.get("description")).isEqualTo("Изменения не сохраняются после редактирования профиля");
         assertThat(row.get("steps_to_reproduce")).isEqualTo("1. Открыть профиль\n2. Изменить имя\n3. Нажать Сохранить");
@@ -137,17 +137,17 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("the Location points to /api/v1/defects/{id} of the created defect")
-    void locationPointsToTheDefect() throws Exception {
+    @DisplayName("the Location points to /api/v1/tickets/{id} of the created ticket")
+    void locationPointsToTheTicket() throws Exception {
         ResultActions result = create(Map.of("title", "Login fails")).andExpect(status().isCreated());
 
         long id = id(result.andReturn().getResponse().getContentAsString());
-        result.andExpect(header().string("Location", "/api/v1/defects/" + id));
+        result.andExpect(header().string("Location", "/api/v1/tickets/" + id));
     }
 
     @Test
     @DisplayName("a request with the title only gets MEDIUM, NEW, FEATURE, empty optional fields and equal timestamps")
-    void createsMinimalDefect() throws Exception {
+    void createsMinimalTicket() throws Exception {
         String body = body(create(Map.of("title", "Crash on start"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.title").value("Crash on start"))
@@ -163,7 +163,7 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.*", Matchers.hasSize(12))));
 
         assertThat((String) JsonPath.read(body, "$.updatedAt")).isEqualTo(JsonPath.read(body, "$.createdAt"));
-        Map<String, Object> row = jdbc.queryForMap("SELECT * FROM defects WHERE id = ?", id(body));
+        Map<String, Object> row = jdbc.queryForMap("SELECT * FROM tickets WHERE id = ?", id(body));
         assertThat(row.get("priority")).isEqualTo("MEDIUM");
         assertThat(row.get("status")).isEqualTo("NEW");
         assertThat(row.get("type")).isEqualTo("FEATURE");
@@ -190,30 +190,30 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
     }
 
     @ParameterizedTest
-    @EnumSource(DefectPriority.class)
+    @EnumSource(TicketPriority.class)
     @DisplayName("every priority is accepted and stored")
-    void everyPriority(DefectPriority priority) throws Exception {
+    void everyPriority(TicketPriority priority) throws Exception {
         String body = body(create(Map.of("title", "Crash on start", "priority", priority.name()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.priority").value(priority.name())));
 
-        assertThat(jdbc.queryForObject("SELECT priority FROM defects WHERE id = ?", String.class, id(body)))
+        assertThat(jdbc.queryForObject("SELECT priority FROM tickets WHERE id = ?", String.class, id(body)))
                 .isEqualTo(priority.name());
     }
 
     @Test
-    @DisplayName("every defect gets its own id from the database")
+    @DisplayName("every ticket gets its own id from the database")
     void idsAreGenerated() throws Exception {
-        long first = id(body(create(Map.of("title", "First defect")).andExpect(status().isCreated())));
-        long second = id(body(create(Map.of("title", "Second defect")).andExpect(status().isCreated())));
+        long first = id(body(create(Map.of("title", "First ticket")).andExpect(status().isCreated())));
+        long second = id(body(create(Map.of("title", "Second ticket")).andExpect(status().isCreated())));
 
         assertThat(second).isNotEqualTo(first);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM defects", Long.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM tickets", Long.class)).isEqualTo(2);
     }
 
     // ---------------------------------------------------------------- title
     //
-    // The rules of the title are pinned by CreateDefectRequestTest; here one case per kind of error
+    // The rules of the title are pinned by CreateTicketRequestTest; here one case per kind of error
     // checks how a violation reaches the client and that the stored value is the normalized one.
 
     @Test
@@ -223,7 +223,7 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.title").value("Login fails")));
 
-        assertThat(jdbc.queryForObject("SELECT title FROM defects WHERE id = ?", String.class, id(body)))
+        assertThat(jdbc.queryForObject("SELECT title FROM tickets WHERE id = ?", String.class, id(body)))
                 .isEqualTo("Login fails");
     }
 
@@ -254,7 +254,7 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$." + field).value(value)));
 
-        assertThat(jdbc.queryForObject("SELECT " + column + " FROM defects WHERE id = ?", String.class, id(body)))
+        assertThat(jdbc.queryForObject("SELECT " + column + " FROM tickets WHERE id = ?", String.class, id(body)))
                 .isEqualTo(value);
     }
 
@@ -265,7 +265,7 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.description").value(Matchers.nullValue())));
 
-        assertThat(jdbc.queryForObject("SELECT description FROM defects WHERE id = ?", String.class, id(body)))
+        assertThat(jdbc.queryForObject("SELECT description FROM tickets WHERE id = ?", String.class, id(body)))
                 .isNull();
     }
 
@@ -282,7 +282,7 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$." + field).value(value)));
 
-        assertThat(jdbc.queryForObject("SELECT " + column + " FROM defects WHERE id = ?", String.class, id(body)))
+        assertThat(jdbc.queryForObject("SELECT " + column + " FROM tickets WHERE id = ?", String.class, id(body)))
                 .isEqualTo(value);
     }
 
@@ -327,7 +327,7 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.fieldErrors.priority").value("has an invalid value"))
                 .andExpect(jsonPath("$.fieldErrors.*", Matchers.hasSize(1))));
 
-        assertThat(body).doesNotContain("URGENT").doesNotContain("DefectPriority").doesNotContain("org.example");
+        assertThat(body).doesNotContain("URGENT").doesNotContain("TicketPriority").doesNotContain("org.example");
         assertNothingStored();
     }
 
@@ -435,7 +435,7 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
     }
 
     private void assertNothingStored() {
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM defects", Long.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM tickets", Long.class)).isZero();
     }
 
     /** Builds a map that may hold null values, which {@link Map#of} does not allow. */
@@ -448,7 +448,7 @@ class DefectCreationIntegrationTest extends PostgresIntegrationTest {
     }
 
     private Instant timestamp(String column, long id) {
-        return jdbc.queryForObject("SELECT " + column + " FROM defects WHERE id = ?", OffsetDateTime.class, id)
+        return jdbc.queryForObject("SELECT " + column + " FROM tickets WHERE id = ?", OffsetDateTime.class, id)
                 .toInstant();
     }
 

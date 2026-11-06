@@ -184,7 +184,7 @@ class LoginIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.id").value(user.getId()))
                 .andExpect(jsonPath("$.email").value(EMAIL))
                 .andExpect(jsonPath("$.role").value("MANAGER"))
-                .andExpect(jsonPath("$.permissions", Matchers.contains("DEFECT_READ", "DEFECT_CREATE", "DEFECT_UPDATE")))
+                .andExpect(jsonPath("$.permissions", Matchers.contains("TICKET_READ", "TICKET_CREATE", "TICKET_UPDATE")))
                 .andExpect(jsonPath("$.createdAt").isString())
                 .andExpect(jsonPath("$.*", Matchers.hasSize(5)));
     }

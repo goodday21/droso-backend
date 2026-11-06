@@ -26,7 +26,7 @@ so the first answer to a task is a plan, never a diff.
 ## 3. Explore, read-only
 
 - Read the code the task touches and the closest existing example (for an endpoint:
-  `DefectController`, `AuthController`, their DTOs, services and tests).
+  `TicketController`, `AuthController`, their DTOs, services and tests).
 - Before relying on a property or an API of Spring Boot 4 / Spring 7 / Jackson 3 / Hibernate 7,
   check it in the jar under `~/.gradle/caches/modules-2` (`spring-configuration-metadata.json`,
   `-sources.jar`), not from memory.

@@ -32,7 +32,7 @@ class) and again before the report:
 1. **The lowest layer.** Could this case run without Spring or without the database? Then it is a
    unit or slice test. A rule tested only through HTTP fails far from its cause.
 2. **No duplicate matrix.** Is the same set of values already in a unit test (`EmailAddressTest`,
-   `PasswordPolicyTest`, `CreateDefectRequestTest`, `DefectTest`, …)? Then the api test takes one of
+   `PasswordPolicyTest`, `CreateTicketRequestTest`, `TicketTest`, …)? Then the api test takes one of
    them, not all. Checking a rule on two layers is right only when two layers apply it on their own
    (the DTO and the entity both normalize the title).
 3. **No new context.** Every distinct `@SpringBootTest(properties = …)`, web environment or

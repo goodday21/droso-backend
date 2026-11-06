@@ -113,7 +113,7 @@ public class SecurityConfig {
         cors.setAllowedOrigins(properties.allowedOrigins());
         cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE"));
         cors.setAllowedHeaders(List.of(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE));
-        // Location of a created defect; WWW-Authenticate of a 401.
+        // Location of a created ticket; WWW-Authenticate of a 401.
         cors.setExposedHeaders(List.of(HttpHeaders.LOCATION, HttpHeaders.WWW_AUTHENTICATE));
         cors.setAllowCredentials(true);
         cors.setMaxAge(Duration.ofHours(1));

@@ -97,7 +97,7 @@ public class User {
     }
 
     /**
-     * Unlike a defect, a user is changed after its creation (password, role, deletion), so the
+     * Unlike a ticket, a user is changed after its creation (password, role, deletion), so the
      * moment of the last change is kept up to date from the start.
      */
     @PreUpdate

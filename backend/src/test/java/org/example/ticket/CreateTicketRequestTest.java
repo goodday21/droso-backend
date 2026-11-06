@@ -1,4 +1,4 @@
-package org.example.defect;
+package org.example.ticket;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -11,7 +11,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
-import org.example.defect.model.CreateDefectRequest;
+import org.example.ticket.model.CreateTicketRequest;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,13 +20,13 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * The normalization and the validation rules of {@link CreateDefectRequest}, with the Bean
+ * The normalization and the validation rules of {@link CreateTicketRequest}, with the Bean
  * Validation provider of the application but without Spring.
  *
  * <p>How the violations reach the client (status, code, joined messages, sorting) is pinned by
- * {@link DefectCreationIntegrationTest}, which keeps one case per kind of error.
+ * {@link TicketCreationIntegrationTest}, which keeps one case per kind of error.
  */
-class CreateDefectRequestTest {
+class CreateTicketRequestTest {
 
     /** One code point, two UTF-16 units. */
     private static final String EMOJI = "😀";
@@ -42,23 +42,23 @@ class CreateDefectRequestTest {
         FACTORY.close();
     }
 
-    private static CreateDefectRequest withTitle(String title) {
-        return new CreateDefectRequest(title, null, null, null, null, null, null);
+    private static CreateTicketRequest withTitle(String title) {
+        return new CreateTicketRequest(title, null, null, null, null, null, null);
     }
 
     /** A valid request with {@code value} in the optional text field {@code field}. */
-    private static CreateDefectRequest withField(String field, String value) {
+    private static CreateTicketRequest withField(String field, String value) {
         String title = "Crash on start";
         return switch (field) {
-            case "description" -> new CreateDefectRequest(title, value, null, null, null, null, null);
-            case "stepsToReproduce" -> new CreateDefectRequest(title, null, value, null, null, null, null);
-            case "expectedResult" -> new CreateDefectRequest(title, null, null, value, null, null, null);
-            case "actualResult" -> new CreateDefectRequest(title, null, null, null, value, null, null);
+            case "description" -> new CreateTicketRequest(title, value, null, null, null, null, null);
+            case "stepsToReproduce" -> new CreateTicketRequest(title, null, value, null, null, null, null);
+            case "expectedResult" -> new CreateTicketRequest(title, null, null, value, null, null, null);
+            case "actualResult" -> new CreateTicketRequest(title, null, null, null, value, null, null);
             default -> throw new IllegalArgumentException(field);
         };
     }
 
-    private static String field(CreateDefectRequest request, String field) {
+    private static String field(CreateTicketRequest request, String field) {
         return switch (field) {
             case "description" -> request.description();
             case "stepsToReproduce" -> request.stepsToReproduce();
@@ -69,9 +69,9 @@ class CreateDefectRequestTest {
     }
 
     /** The messages of the violations per field, sorted. */
-    private static Map<String, Set<String>> violations(CreateDefectRequest request) {
+    private static Map<String, Set<String>> violations(CreateTicketRequest request) {
         Map<String, Set<String>> violations = new TreeMap<>();
-        for (ConstraintViolation<CreateDefectRequest> violation : VALIDATOR.validate(request)) {
+        for (ConstraintViolation<CreateTicketRequest> violation : VALIDATOR.validate(request)) {
             violations.computeIfAbsent(violation.getPropertyPath().toString(), field -> new TreeSet<>())
                     .add(violation.getMessage());
         }
@@ -104,7 +104,7 @@ class CreateDefectRequestTest {
     @Test
     @DisplayName("a title of 120 characters surrounded by whitespace is stripped before it is validated")
     void titleIsStrippedBeforeValidation() {
-        CreateDefectRequest request = withTitle("   " + "a".repeat(120) + "   ");
+        CreateTicketRequest request = withTitle("   " + "a".repeat(120) + "   ");
 
         assertThat(request.title()).isEqualTo("a".repeat(120));
         assertThat(violations(request)).isEmpty();
@@ -171,7 +171,7 @@ class CreateDefectRequestTest {
     @DisplayName("an optional field of invisible characters only becomes null, whatever its length")
     void invisibleOptionalFieldIsNull(String field) {
         for (String blank : new String[] {"", "  \t\n  ", " \u200B\uFEFF ", " ".repeat(6000)}) {
-            CreateDefectRequest request = withField(field, blank);
+            CreateTicketRequest request = withField(field, blank);
 
             assertThat(field(request, field)).isNull();
             assertThat(violations(request)).isEmpty();

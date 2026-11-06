@@ -16,11 +16,11 @@ import java.util.Set;
 public enum Role {
 
     /** Also manages the users. */
-    ADMIN(Permission.DEFECT_READ, Permission.DEFECT_CREATE, Permission.DEFECT_UPDATE, Permission.USER_MANAGE),
-    /** Also edits the defects. */
-    MANAGER(Permission.DEFECT_READ, Permission.DEFECT_CREATE, Permission.DEFECT_UPDATE),
-    /** The role of every user who registers on their own: reads and reports defects. */
-    USER(Permission.DEFECT_READ, Permission.DEFECT_CREATE);
+    ADMIN(Permission.TICKET_READ, Permission.TICKET_CREATE, Permission.TICKET_UPDATE, Permission.USER_MANAGE),
+    /** Also edits the tickets. */
+    MANAGER(Permission.TICKET_READ, Permission.TICKET_CREATE, Permission.TICKET_UPDATE),
+    /** The role of every user who registers on their own: reads and reports tickets. */
+    USER(Permission.TICKET_READ, Permission.TICKET_CREATE);
 
     private final Set<Permission> permissions;
 

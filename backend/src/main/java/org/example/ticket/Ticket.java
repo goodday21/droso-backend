@@ -1,4 +1,4 @@
-package org.example.defect;
+package org.example.ticket;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -15,16 +15,17 @@ import jakarta.persistence.Table;
 import org.example.text.InvisibleText;
 
 /**
- * A defect reported by a user. The table is created by the migration {@code V2__create_defects.sql}.
+ * A ticket reported by a user. The table is created by the migration
+ * {@code V2__create_defects.sql} as {@code defects} and renamed by {@code V10__rename_defects_to_tickets.sql}.
  *
- * <p>A new defect always has the status {@link DefectStatus#NEW}; its priority defaults to
- * {@link DefectPriority#MEDIUM}, its type to {@link DefectType#FEATURE}. A defect is soft-deleted:
- * {@code deletedAt} is set and the row stays, and a deleted defect is absent for the API. Both timestamps are set by the application when the defect is
+ * <p>A new ticket always has the status {@link TicketStatus#NEW}; its priority defaults to
+ * {@link TicketPriority#MEDIUM}, its type to {@link TicketType#FEATURE}. A ticket is soft-deleted:
+ * {@code deletedAt} is set and the row stays, and a deleted ticket is absent for the API. Both timestamps are set by the application when the ticket is
  * persisted for the first time.
  */
 @Entity
-@Table(name = "defects")
-public class Defect {
+@Table(name = "tickets")
+public class Ticket {
 
     // The limits of the text fields, in characters (code points), as in the VARCHAR columns.
     // Public, so that the request DTOs validate the same limits instead of repeating the numbers.
@@ -56,19 +57,19 @@ public class Defect {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "priority", nullable = false, length = 16)
-    private DefectPriority priority = DefectPriority.MEDIUM;
+    private TicketPriority priority = TicketPriority.MEDIUM;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
-    private DefectStatus status = DefectStatus.NEW;
+    private TicketStatus status = TicketStatus.NEW;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 16)
-    private DefectType type = DefectType.FEATURE;
+    private TicketType type = TicketType.FEATURE;
 
     /**
-     * The id of the user who reported the defect; {@code null} for the defects created before the
-     * authors were recorded ({@code V6}). An id rather than a relation to {@code User}: the defect
+     * The id of the user who reported the ticket; {@code null} for the tickets created before the
+     * authors were recorded ({@code V6}). An id rather than a relation to {@code User}: the ticket
      * needs no more of the user, and a lazy relation would fail outside the transaction.
      */
     @Column(name = "created_by", updatable = false)
@@ -80,12 +81,12 @@ public class Defect {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    /** {@code null} while the defect is active. Nothing sets it yet: there is no deletion. */
+    /** {@code null} while the ticket is active. Nothing sets it yet: there is no deletion. */
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
     /** Required by JPA. */
-    protected Defect() {
+    protected Ticket() {
     }
 
     /**
@@ -95,13 +96,13 @@ public class Defect {
      * @param stepsToReproduce optional; as {@code description}
      * @param expectedResult   optional; as {@code description}
      * @param actualResult     optional; as {@code description}
-     * @param priority         optional; {@link DefectPriority#MEDIUM} when {@code null}
-     * @param type             optional; {@link DefectType#FEATURE} when {@code null}
-     * @param createdBy        required; the id of the user who reports the defect
+     * @param priority         optional; {@link TicketPriority#MEDIUM} when {@code null}
+     * @param type             optional; {@link TicketType#FEATURE} when {@code null}
+     * @param createdBy        required; the id of the user who reports the ticket
      * @throws IllegalArgumentException if the title violates its length rule or the author is missing
      */
-    public Defect(String title, String description, String stepsToReproduce, String expectedResult,
-            String actualResult, DefectPriority priority, DefectType type, Long createdBy) {
+    public Ticket(String title, String description, String stepsToReproduce, String expectedResult,
+            String actualResult, TicketPriority priority, TicketType type, Long createdBy) {
         this.title = normalizeTitle(title);
         this.description = InvisibleText.blankToNull(description);
         this.stepsToReproduce = InvisibleText.blankToNull(stepsToReproduce);
@@ -169,19 +170,19 @@ public class Defect {
         return actualResult;
     }
 
-    public DefectPriority getPriority() {
+    public TicketPriority getPriority() {
         return priority;
     }
 
-    public DefectStatus getStatus() {
+    public TicketStatus getStatus() {
         return status;
     }
 
-    public DefectType getType() {
+    public TicketType getType() {
         return type;
     }
 
-    /** {@code null} only for a defect created before the authors were recorded. */
+    /** {@code null} only for a ticket created before the authors were recorded. */
     public Long getCreatedBy() {
         return createdBy;
     }
@@ -194,7 +195,7 @@ public class Defect {
         return updatedAt;
     }
 
-    /** {@code null} while the defect is active. */
+    /** {@code null} while the ticket is active. */
     public Instant getDeletedAt() {
         return deletedAt;
     }

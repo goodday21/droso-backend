@@ -2,9 +2,9 @@ package org.example.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.example.user.Permission.DEFECT_CREATE;
-import static org.example.user.Permission.DEFECT_READ;
-import static org.example.user.Permission.DEFECT_UPDATE;
+import static org.example.user.Permission.TICKET_CREATE;
+import static org.example.user.Permission.TICKET_READ;
+import static org.example.user.Permission.TICKET_UPDATE;
 import static org.example.user.Permission.USER_MANAGE;
 
 import org.junit.jupiter.api.DisplayName;
@@ -15,9 +15,9 @@ class RoleTest {
     @Test
     @DisplayName("each role has exactly the permissions of the agreed matrix")
     void matrix() {
-        assertThat(Role.USER.permissions()).containsExactly(DEFECT_READ, DEFECT_CREATE);
-        assertThat(Role.MANAGER.permissions()).containsExactly(DEFECT_READ, DEFECT_CREATE, DEFECT_UPDATE);
-        assertThat(Role.ADMIN.permissions()).containsExactly(DEFECT_READ, DEFECT_CREATE, DEFECT_UPDATE, USER_MANAGE);
+        assertThat(Role.USER.permissions()).containsExactly(TICKET_READ, TICKET_CREATE);
+        assertThat(Role.MANAGER.permissions()).containsExactly(TICKET_READ, TICKET_CREATE, TICKET_UPDATE);
+        assertThat(Role.ADMIN.permissions()).containsExactly(TICKET_READ, TICKET_CREATE, TICKET_UPDATE, USER_MANAGE);
     }
 
     @Test

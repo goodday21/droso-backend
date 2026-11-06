@@ -160,6 +160,6 @@ class EndpointAccessIntegrationTest extends PostgresIntegrationTest {
         assertThat(endpoints())
                 .containsAll(PUBLIC)
                 .containsAll(ANY_USER)
-                .contains("GET /api/v1/auth/me", "POST /api/v1/defects", "GET /api/v1/defects/{id}");
+                .contains("GET /api/v1/auth/me", "POST /api/v1/tickets", "GET /api/v1/tickets/{id}");
     }
 }

@@ -1,4 +1,4 @@
-package org.example.defect;
+package org.example.ticket;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,17 +25,17 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * {@code GET /api/v1/defects/{id}} over a real HTTP connection to the embedded Tomcat.
+ * {@code GET /api/v1/tickets/{id}} over a real HTTP connection to the embedded Tomcat.
  *
  * <p>MockMvc skips the servlet container, which decodes and normalizes the URL first. These tests
  * pin what a client really gets for the unusual URLs: most reach Spring MVC and get an
  * {@code ApiError}, some are rejected by Tomcat itself before.
  *
  * <p>What a client gets while PostgreSQL is down is checked by
- * {@link DefectRetrievalDatabaseDownHttpIntegrationTest}, which stops a server of its own.
+ * {@link TicketRetrievalDatabaseDownHttpIntegrationTest}, which stops a server of its own.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class DefectRetrievalHttpIntegrationTest extends PostgresIntegrationTest {
+class TicketRetrievalHttpIntegrationTest extends PostgresIntegrationTest {
     private static final String NOT_FOUND =
             "{\"status\":404,\"code\":\"RESOURCE_NOT_FOUND\",\"message\":\"Resource not found\",\"fieldErrors\":{}}";
     private static final String INVALID_ID = "{\"status\":400,\"code\":\"VALIDATION_ERROR\","
@@ -61,17 +61,17 @@ class DefectRetrievalHttpIntegrationTest extends PostgresIntegrationTest {
     /** The header Authorization of a user with the role USER. */
     private String bearer;
 
-    /** The defect 26, so that an alias of its id would answer 200 instead of an error. */
+    /** The ticket 26, so that an alias of its id would answer 200 instead of an error. */
     @BeforeEach
-    void storeDefect26() {
+    void storeTicket26() {
         bearer = TestUsers.bearer(tokens, TestUsers.create(users, Role.USER));
-        jdbc.update("INSERT INTO defects (id, title, priority, status, created_at, updated_at)"
+        jdbc.update("INSERT INTO tickets (id, title, priority, status, created_at, updated_at)"
                 + " VALUES (26, 'Crash on start', 'HIGH', 'NEW', '2026-01-02T03:04:05.123456Z', '2026-01-02T03:04:05.123456Z')");
     }
 
     @Test
-    @DisplayName("a stored defect answers 200 with the JSON of the defect")
-    void existingDefect() throws Exception {
+    @DisplayName("a stored ticket answers 200 with the JSON of the ticket")
+    void existingTicket() throws Exception {
         HttpResponse<String> response = get("26");
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -86,8 +86,8 @@ class DefectRetrievalHttpIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("a missing defect answers 404 RESOURCE_NOT_FOUND")
-    void missingDefect() throws Exception {
+    @DisplayName("a missing ticket answers 404 RESOURCE_NOT_FOUND")
+    void missingTicket() throws Exception {
         HttpResponse<String> response = get("27");
 
         assertThat(response.statusCode()).isEqualTo(404);
@@ -119,7 +119,7 @@ class DefectRetrievalHttpIntegrationTest extends PostgresIntegrationTest {
     /**
      * A path parameter ({@code ;name=value}, e.g. {@code ;jsessionid=}) would be removed from the URL
      * before the mapping, as the Servlet specification provides, so {@code 26;x=1} would be the
-     * defect 26. The firewall of Spring Security rejects a semicolon, plain or encoded, before that.
+     * ticket 26. The firewall of Spring Security rejects a semicolon, plain or encoded, before that.
      */
     @ParameterizedTest
     @ValueSource(strings = {"26;x=1", "26;jsessionid=abc", "%3B26"})
@@ -150,7 +150,7 @@ class DefectRetrievalHttpIntegrationTest extends PostgresIntegrationTest {
 
     private HttpResponse<String> get(String id) throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + "/api/v1/defects/" + id))
+                .uri(URI.create("http://localhost:" + port + "/api/v1/tickets/" + id))
                 .header(HttpHeaders.AUTHORIZATION, bearer)
                 .GET()
                 .build();

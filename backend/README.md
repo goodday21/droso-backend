@@ -84,9 +84,9 @@ permission is fixed in the code (`org.example.user.Role`), and the roles are nes
 
 | Permission      | `USER` | `MANAGER` | `ADMIN` | Needed by                    |
 |-----------------|:------:|:---------:|:-------:|------------------------------|
-| `DEFECT_READ`   |   ✓    |     ✓     |    ✓    | `GET /api/v1/defects/{id}`   |
-| `DEFECT_CREATE` |   ✓    |     ✓     |    ✓    | `POST /api/v1/defects`       |
-| `DEFECT_UPDATE` |        |     ✓     |    ✓    | (the editing of the defects, to come) |
+| `TICKET_READ`   |   ✓    |     ✓     |    ✓    | `GET /api/v1/tickets/{id}`   |
+| `TICKET_CREATE` |   ✓    |     ✓     |    ✓    | `POST /api/v1/tickets`       |
+| `TICKET_UPDATE` |        |     ✓     |    ✓    | (the editing of the tickets, to come) |
 | `USER_MANAGE`   |        |           |    ✓    | [`/api/v1/users`](#managing-users)  |
 
 A change of the role in the database applies to the next request, without a new token.
@@ -132,9 +132,12 @@ should not depend on the database.
 This section is the source of truth of the contract: the frontend model
 ([`health.model.ts`](https://github.com/goodday21/droso-frontend/blob/main/src/app/health/health.model.ts)) follows it.
 
-### Creating a defect
+### Creating a ticket
 
-`POST /api/v1/defects` with `Content-Type: application/json`:
+A ticket is a feature or a bug (`type`). The endpoints were `/api/v1/defects` and the permissions
+`DEFECT_*` before the rename; the old paths no longer exist.
+
+`POST /api/v1/tickets` with `Content-Type: application/json`:
 
 ```json
 {
@@ -166,10 +169,10 @@ any other is stored exactly as sent, its surrounding whitespace and line breaks 
 Lengths are counted in characters (Unicode code points), as by the `VARCHAR` columns: an emoji is
 one character.
 
-Needs the permission `DEFECT_CREATE` (every role has it). The author of the defect is the user of
+Needs the permission `TICKET_CREATE` (every role has it). The author of the ticket is the user of
 the token.
 
-**HTTP 201** with the header `Location: /api/v1/defects/{id}` (relative) and the stored defect:
+**HTTP 201** with the header `Location: /api/v1/tickets/{id}` (relative) and the stored ticket:
 
 ```json
 {
@@ -189,14 +192,14 @@ the token.
 ```
 
 Every field of the response is always present (`null` when not set). `id`, `status` (always `NEW`),
-`createdBy` (the id of the reporting user), `createdAt` and `updatedAt` (equal for a new defect) are
-chosen by the server. `createdBy` is `null` only for the defects created before the authors were
+`createdBy` (the id of the reporting user), `createdAt` and `updatedAt` (equal for a new ticket) are
+chosen by the server. `createdBy` is `null` only for the tickets created before the authors were
 recorded.
 
 `status` is one of `NEW`, `IN_DEVELOPMENT`, `IN_REVIEW`, `READY_FOR_QA`, `IN_QA`, `WAITING_FOR_FIX`,
-`READY_TO_RELEASE`, `RELEASED`, `DECLINED`. A new defect is always `NEW`; the API cannot change the
+`READY_TO_RELEASE`, `RELEASED`, `DECLINED`. A new ticket is always `NEW`; the API cannot change the
 status yet, and the transitions between the statuses are not defined yet. A client should be ready
-for every value of the list. The defects created before the type existed are `FEATURE`.
+for every value of the list. The tickets created before the type existed are `FEATURE`.
 
 **Unknown properties are rejected**, including `id`, `status`, `createdBy`, `createdAt` and `updatedAt`:
 `400 VALIDATION_ERROR` with `"fieldErrors": {"status": "is not allowed"}`. A client that sends them
@@ -204,33 +207,33 @@ must not believe it has set them, and a misspelt `"priorty"` must not silently f
 Only the first unknown property is reported. An enum is not read from its index either
 (`"priority": 2` is rejected).
 
-### Getting a defect
+### Getting a ticket
 
-`GET /api/v1/defects/{id}`, needs the permission `DEFECT_READ` (every role has it).
+`GET /api/v1/tickets/{id}`, needs the permission `TICKET_READ` (every role has it).
 
-**HTTP 200** with the stored defect, in the same format as the response of `POST` above. Nothing is
+**HTTP 200** with the stored ticket, in the same format as the response of `POST` above. Nothing is
 written: the request runs in a read-only transaction.
 
-**HTTP 404** `RESOURCE_NOT_FOUND` if there is no defect with this id, or it is deleted (defects are
-soft-deleted, `defects.deleted_at`; the API cannot delete one yet). The body names neither the
+**HTTP 404** `RESOURCE_NOT_FOUND` if there is no ticket with this id, or it is deleted (tickets are
+soft-deleted, `tickets.deleted_at`; the API cannot delete one yet). The body names neither the
 resource nor the id.
 
 **HTTP 400** `VALIDATION_ERROR` with `"fieldErrors": {"id": "has an invalid value"}` if the id is not
 in its canonical form: a positive decimal number of ASCII digits, without sign, leading zeros or
 whitespace, at most `9223372036854775807`. So `abc`, `1.5`, `0`, `-1` are rejected, and so are
 `026`, `+26`, `0x1A`, `%231A` (`#1A`) and `%2026`, which the default conversion of Spring would
-silently read as the defect 26 (`org.example.web.CanonicalIdEditor`).
+silently read as the ticket 26 (`org.example.web.CanonicalIdEditor`).
 
 Two cases are decided before this check:
 
-* A semicolon, plain or encoded (`/api/v1/defects/26;x=1`, `%3B26`), is rejected by the firewall
+* A semicolon, plain or encoded (`/api/v1/tickets/26;x=1`, `%3B26`), is rejected by the firewall
   of Spring Security with `400 BAD_REQUEST`. Without it, the servlet container would remove
-  `;x=1` as a path parameter and answer the defect 26.
+  `;x=1` as a path parameter and answer the ticket 26.
 * An encoded slash, backslash or NUL (`%2F`, `%5C`, `%00`) is rejected by Tomcat with `400` and its
   bare HTML error page, not with the body below.
 
-`GET /api/v1/defects` (the list) does not exist and answers `405 METHOD_NOT_ALLOWED`;
-`/api/v1/defects/` and `/api/v1/defects/26/x` answer `404`.
+`GET /api/v1/tickets` (the list) does not exist and answers `405 METHOD_NOT_ALLOWED`;
+`/api/v1/tickets/` and `/api/v1/tickets/26/x` answer `404`.
 
 ### Registering a user
 
@@ -347,7 +350,7 @@ that role, in a fixed order:
   "id": 1,
   "email": "qwe.qwe+1@gmail.com",
   "role": "USER",
-  "permissions": ["DEFECT_READ", "DEFECT_CREATE"],
+  "permissions": ["TICKET_READ", "TICKET_CREATE"],
   "createdAt": "2026-10-27T10:15:30.123456Z"
 }
 ```
@@ -406,7 +409,7 @@ with `401 INVALID_CREDENTIALS`, and the email may be registered again, as a new 
 A deleted user cannot be restored. An administrator may demote or delete themselves while another
 active administrator exists.
 
-An id that is not canonical answers `400`, as for the defects.
+An id that is not canonical answers `400`, as for the tickets.
 
 ### Error responses
 
@@ -709,8 +712,8 @@ SELECT id, email, role_code, left(password_hash, 15), token_version, deleted_at,
 ```
 
 `UPDATE users SET token_version = token_version + 1` makes the next request with the token answer
-`401`; so does `deleted_at = now()`. `/me` lists `"permissions":["DEFECT_READ","DEFECT_CREATE"]`;
-after `UPDATE users SET role_code = 'MANAGER'` the same token lists `DEFECT_UPDATE` too.
+`401`; so does `deleted_at = now()`. `/me` lists `"permissions":["TICKET_READ","TICKET_CREATE"]`;
+after `UPDATE users SET role_code = 'MANAGER'` the same token lists `TICKET_UPDATE` too.
 
 ### Refreshing and logging out
 
@@ -745,19 +748,19 @@ and `DROSO_BOOTSTRAP_ADMIN_PASSWORD=Adm1n-Secret!` on a database without one: th
 `Created the administrator with the id ...`, and the login with them answers a token whose `/me`
 has `"role":"ADMIN"`. Without the variables the log warns `There is no administrator`.
 
-### Creating a defect
+### Creating a ticket
 
 ```bash
-curl -i -X POST http://localhost:8080/api/v1/defects   -H "Authorization: Bearer $TOKEN"   -H "Content-Type: application/json"   -d '{"title": "Login fails", "priority": "HIGH"}'
+curl -i -X POST http://localhost:8080/api/v1/tickets   -H "Authorization: Bearer $TOKEN"   -H "Content-Type: application/json"   -d '{"title": "Login fails", "priority": "HIGH"}'
 ```
 
 Without the header it answers `401 UNAUTHORIZED` and stores nothing.
 
-`201` with `Location: /api/v1/defects/1` and the defect with `"status":"NEW"`. The row is in the
+`201` with `Location: /api/v1/tickets/1` and the ticket with `"status":"NEW"`. The row is in the
 database (`psql -h localhost -U <POSTGRES_USER> <POSTGRES_DB>`, see `db-local.properties`):
 
 ```sql
-SELECT id, title, priority, status, created_by, created_at, updated_at FROM defects;
+SELECT id, title, priority, status, created_by, created_at, updated_at FROM tickets;
 ```
 
 `created_by` (and `createdBy` in the response) is the id of the user of the token.
@@ -766,19 +769,19 @@ SELECT id, title, priority, status, created_by, created_at, updated_at FROM defe
 fails", "status": "CLOSED"}'` answers `400` with `"status": "is not allowed"`, `'{"title": '`
 answers `400 MALFORMED_REQUEST`.
 
-### Getting a defect
+### Getting a ticket
 
 ```bash
-curl -i http://localhost:8080/api/v1/defects/1 -H "Authorization: Bearer $TOKEN"
+curl -i http://localhost:8080/api/v1/tickets/1 -H "Authorization: Bearer $TOKEN"
 ```
 
-`200` with the defect created above. `/api/v1/defects/999999` answers `404 RESOURCE_NOT_FOUND`,
-`/api/v1/defects/abc` and `/api/v1/defects/0x1` answer `400 VALIDATION_ERROR` with
+`200` with the ticket created above. `/api/v1/tickets/999999` answers `404 RESOURCE_NOT_FOUND`,
+`/api/v1/tickets/abc` and `/api/v1/tickets/0x1` answer `400 VALIDATION_ERROR` with
 `fieldErrors.id`. The row in the database is unchanged by the GET.
 
 On Windows, `curl` does not pass a non-ASCII `-d` argument as UTF-8, so a Cyrillic title arrives as
 invalid UTF-8 and answers `400 MALFORMED_REQUEST`. Put such a body into a UTF-8 file and send it
-with `--data-binary @defect.json`.
+with `--data-binary @ticket.json`.
 
 ### Managing users
 

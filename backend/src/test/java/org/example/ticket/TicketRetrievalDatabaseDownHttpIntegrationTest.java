@@ -1,4 +1,4 @@
-package org.example.defect;
+package org.example.ticket;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -21,11 +21,11 @@ import org.springframework.http.HttpHeaders;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * {@code GET /api/v1/defects/{id}} over a real HTTP connection while PostgreSQL is down. A class of
+ * {@code GET /api/v1/tickets/{id}} over a real HTTP connection while PostgreSQL is down. A class of
  * its own, because it stops the server: see {@link IsolatedPostgresIntegrationTest}.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class DefectRetrievalDatabaseDownHttpIntegrationTest extends IsolatedPostgresIntegrationTest {
+class TicketRetrievalDatabaseDownHttpIntegrationTest extends IsolatedPostgresIntegrationTest {
 
     @LocalServerPort
     private int port;
@@ -50,7 +50,7 @@ class DefectRetrievalDatabaseDownHttpIntegrationTest extends IsolatedPostgresInt
         postgres().close();
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + "/api/v1/defects/26"))
+                .uri(URI.create("http://localhost:" + port + "/api/v1/tickets/26"))
                 .header(HttpHeaders.AUTHORIZATION, bearer)
                 .GET()
                 .build();

@@ -53,23 +53,23 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
         Integer failed = jdbc.queryForObject(
                 "SELECT count(*) FROM flyway_schema_history WHERE success = false", Integer.class);
 
-        assertThat(versions).contains("1", "2", "3", "4", "5", "6", "7", "8", "9");
+        assertThat(versions).contains("1", "2", "3", "4", "5", "6", "7", "8", "9", "10");
         assertThat(failed).isZero();
         assertThat(tableExists(jdbc, "demo_item")).isTrue();
-        assertThat(tableExists(jdbc, "defects")).isTrue();
+        assertThat(tableExists(jdbc, "tickets")).isTrue();
         assertThat(tableExists(jdbc, "users")).isTrue();
         assertThat(tableExists(jdbc, "roles")).isTrue();
     }
 
     @Test
-    @DisplayName("the defects table has the expected columns, types, lengths and nullability")
-    void defectsColumns() {
+    @DisplayName("the tickets table has the expected columns, types, lengths and nullability")
+    void ticketsColumns() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
 
         List<String> columns = jdbc.query("""
                 SELECT column_name, data_type, character_maximum_length, is_nullable, is_identity
                 FROM information_schema.columns
-                WHERE table_schema = 'public' AND table_name = 'defects'
+                WHERE table_schema = 'public' AND table_name = 'tickets'
                 ORDER BY ordinal_position
                 """,
                 (rs, row) -> String.join(" ", rs.getString("column_name"), rs.getString("data_type"),
@@ -93,16 +93,16 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("defects.created_by refers to users and is indexed")
-    void defectsCreatedBy() {
+    @DisplayName("tickets.created_by refers to users and is indexed")
+    void ticketsCreatedBy() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
 
         String foreignKey = jdbc.queryForObject("""
                 SELECT pg_get_constraintdef(oid) FROM pg_constraint
-                WHERE conrelid = 'defects'::regclass AND conname = 'defects_created_by_fkey'
+                WHERE conrelid = 'tickets'::regclass AND conname = 'tickets_created_by_fkey'
                 """, String.class);
         String index = jdbc.queryForObject(
-                "SELECT indexdef FROM pg_indexes WHERE tablename = 'defects' AND indexname = 'defects_created_by_idx'",
+                "SELECT indexdef FROM pg_indexes WHERE tablename = 'tickets' AND indexname = 'tickets_created_by_idx'",
                 String.class);
 
         assertThat(foreignKey).isEqualTo("FOREIGN KEY (created_by) REFERENCES users(id)");
@@ -110,12 +110,12 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("the defects table defaults the priority to MEDIUM, the status to NEW, the type to FEATURE and keeps a defect active")
-    void defectsDefaults() {
+    @DisplayName("the tickets table defaults the priority to MEDIUM, the status to NEW, the type to FEATURE and keeps a ticket active")
+    void ticketsDefaults() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
 
         Map<String, Object> row = jdbc.queryForMap("""
-                INSERT INTO defects (title, created_at, updated_at) VALUES ('Defaults', now(), now())
+                INSERT INTO tickets (title, created_at, updated_at) VALUES ('Defaults', now(), now())
                 RETURNING priority, status, type, deleted_at
                 """);
 
@@ -127,19 +127,19 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
-            "INSERT INTO defects (title, priority, created_at, updated_at) VALUES ('Unknown', 'URGENT', now(), now())",
-            "INSERT INTO defects (title, status, created_at, updated_at) VALUES ('Unknown', 'CLOSED', now(), now())",
-            "INSERT INTO defects (title, status, created_at, updated_at) VALUES ('Unknown', 'WAITING_FOR_FIXES', now(), now())",
-            "INSERT INTO defects (title, status, created_at, updated_at) VALUES ('Unknown', 'new', now(), now())",
-            "INSERT INTO defects (title, type, created_at, updated_at) VALUES ('Unknown', 'TASK', now(), now())",
-            "INSERT INTO defects (title, type, created_at, updated_at) VALUES ('Unknown', NULL, now(), now())",
-            "INSERT INTO defects (title, created_at, updated_at) VALUES (NULL, now(), now())",
-            "INSERT INTO defects (title, created_at, updated_at) VALUES (repeat('a', 121), now(), now())",
-            "INSERT INTO defects (title, updated_at) VALUES ('No creation time', now())",
-            "INSERT INTO defects (title, created_at) VALUES ('No update time', now())"
+            "INSERT INTO tickets (title, priority, created_at, updated_at) VALUES ('Unknown', 'URGENT', now(), now())",
+            "INSERT INTO tickets (title, status, created_at, updated_at) VALUES ('Unknown', 'CLOSED', now(), now())",
+            "INSERT INTO tickets (title, status, created_at, updated_at) VALUES ('Unknown', 'WAITING_FOR_FIXES', now(), now())",
+            "INSERT INTO tickets (title, status, created_at, updated_at) VALUES ('Unknown', 'new', now(), now())",
+            "INSERT INTO tickets (title, type, created_at, updated_at) VALUES ('Unknown', 'TASK', now(), now())",
+            "INSERT INTO tickets (title, type, created_at, updated_at) VALUES ('Unknown', NULL, now(), now())",
+            "INSERT INTO tickets (title, created_at, updated_at) VALUES (NULL, now(), now())",
+            "INSERT INTO tickets (title, created_at, updated_at) VALUES (repeat('a', 121), now(), now())",
+            "INSERT INTO tickets (title, updated_at) VALUES ('No creation time', now())",
+            "INSERT INTO tickets (title, created_at) VALUES ('No update time', now())"
     })
-    @DisplayName("the defects table rejects rows that violate its constraints")
-    void defectsConstraints(String insert) {
+    @DisplayName("the tickets table rejects rows that violate its constraints")
+    void ticketsConstraints(String insert) {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
 
         assertThatThrownBy(() -> jdbc.update(insert)).isInstanceOf(DataIntegrityViolationException.class);
@@ -158,7 +158,7 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
 
         Flyway.configure().dataSource(upgraded).locations("classpath:db/migration").load().migrate();
 
-        assertThat(tableExists(jdbc, "defects")).isTrue();
+        assertThat(tableExists(jdbc, "tickets")).isTrue();
         assertThat(tableExists(jdbc, "users")).isTrue();
         assertThat(jdbc.queryForList("SELECT name FROM demo_item", String.class)).containsExactly("kept");
         assertThat(jdbc.queryForList(
@@ -180,7 +180,7 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
         Flyway.configure().dataSource(upgraded).locations("classpath:db/migration").load().migrate();
 
         assertThat(tableExists(jdbc, "users")).isTrue();
-        assertThat(jdbc.queryForList("SELECT title FROM defects", String.class)).containsExactly("Kept defect");
+        assertThat(jdbc.queryForList("SELECT title FROM tickets", String.class)).containsExactly("Kept defect");
     }
 
     @Test
@@ -195,11 +195,43 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
 
         Flyway.configure().dataSource(upgraded).locations("classpath:db/migration").load().migrate();
 
-        Map<String, Object> row = jdbc.queryForMap("SELECT title, status, type, deleted_at FROM defects");
+        Map<String, Object> row = jdbc.queryForMap("SELECT title, status, type, deleted_at FROM tickets");
         assertThat(row.get("title")).isEqualTo("Kept defect");
         assertThat(row.get("status")).isEqualTo("NEW");
         assertThat(row.get("type")).isEqualTo("FEATURE");
         assertThat(row.get("deleted_at")).isNull();
+    }
+
+    @Test
+    @DisplayName("the rename to tickets keeps the stored defects, their ids and the identity, and leaves no defects_ object")
+    void upgradeRenamesDefectsToTickets() throws Exception {
+        new JdbcTemplate(postgres().getPostgresDatabase()).execute("CREATE DATABASE upgrade_tickets");
+        DataSource upgraded = postgres().getDatabase("postgres", "upgrade_tickets");
+        JdbcTemplate jdbc = new JdbcTemplate(upgraded);
+
+        Flyway.configure().dataSource(upgraded).locations("classpath:db/migration").target("9").load().migrate();
+        jdbc.update("INSERT INTO defects (title, type, created_at, updated_at) VALUES ('Kept bug', 'BUG', now(), now())");
+        jdbc.update("INSERT INTO defects (title, created_at, updated_at) VALUES ('Kept feature', now(), now())");
+
+        Flyway.configure().dataSource(upgraded).locations("classpath:db/migration").load().migrate();
+
+        assertThat(tableExists(jdbc, "defects")).isFalse();
+        assertThat(jdbc.queryForList("SELECT id || ' ' || title || ' ' || type FROM tickets ORDER BY id", String.class))
+                .containsExactly("1 Kept bug BUG", "2 Kept feature FEATURE");
+        // The identity goes on where the defects stopped.
+        assertThat(jdbc.queryForObject(
+                "INSERT INTO tickets (title, created_at, updated_at) VALUES ('New ticket', now(), now()) RETURNING id",
+                Long.class)).isEqualTo(3L);
+        // Tables, sequences, indexes and constraints: nothing is named after the old table any more.
+        assertThat(jdbc.queryForList("""
+                SELECT relname FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname LIKE 'defects%'
+                UNION ALL
+                SELECT conname FROM pg_constraint WHERE connamespace = 'public'::regnamespace AND conname LIKE 'defects%'
+                """, String.class)).isEmpty();
+        assertThat(jdbc.queryForList("SELECT description FROM roles ORDER BY code", String.class)).containsExactly(
+                "Reads, creates and edits the tickets, manages the users",
+                "Reads, creates and edits the tickets",
+                "Reads and creates the tickets");
     }
 
     @Test
@@ -332,4 +364,4 @@ class FlywayMigrationIntegrationTest extends PostgresIntegrationTest {
 
         assertThat(value).isEqualTo(1);
     }
-}
+}

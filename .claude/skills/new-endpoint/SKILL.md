@@ -5,7 +5,7 @@ description: Checklist for adding or changing a REST endpoint of droso-backend (
 
 # Adding a REST endpoint
 
-The existing endpoints are the reference: `DefectController` (create + get by id) and
+The existing endpoints are the reference: `TicketController` (create + get by id) and
 `AuthController` (public endpoints, `/me` with the principal). Copy their shape, not just the idea.
 Each item below exists because it is easy to miss and the tests or the contract depend on it.
 
@@ -44,7 +44,7 @@ Write down, before the code (and in the plan of `start-task`):
 ## Service and entity
 
 - Rules that must hold for every caller live in the entity/service, not only in the DTO
-  (e.g. `Defect` strips and checks the title again).
+  (e.g. `Ticket` strips and checks the title again).
 - A missing resource: `throw new ResourceNotFoundException("<Resource>", id)` → `404`.
 - A unique conflict: let the database constraint decide and map its violation (as the registration
   does with `users_email_active_key`), no "exists" query before the insert.
@@ -82,7 +82,7 @@ Write down, before the code (and in the plan of `start-task`):
 
 - Put every case on the lowest layer that can check it and measure the pyramid: the `test-pyramid`
   skill. The rules and normalization of the DTO go into a unit test with a `Validator`
-  (`CreateDefectRequestTest`); the integration test keeps one case per kind of error.
+  (`CreateTicketRequestTest`); the integration test keeps one case per kind of error.
 - An integration test class `<Resource><Action>IntegrationTest extends PostgresIntegrationTest`
   with `@SpringBootTest` + `@AutoConfigureMockMvc`
   (`org.springframework.boot.webmvc.test.autoconfigure`). The tables are empty before every test
@@ -94,7 +94,7 @@ Write down, before the code (and in the plan of `start-task`):
   that a changed code, message or `fieldErrors` fails.
 - Cover at least: success (status, headers, body, the stored row), `401` without a token (and with
   a broken one), `403` if a permission is required (a role without it; if every role has it, call
-  the controller bean under an authentication without it, as `DefectPermissionIntegrationTest`), every `400` of the DTO (missing, too long,
+  the controller bean under an authentication without it, as `TicketPermissionIntegrationTest`), every `400` of the DTO (missing, too long,
   invisible, unknown property, wrong enum), `404` for a missing id, non-canonical ids
   (`026`, `0x1A`, `+26`), any `409`.
 - A web test without a database: `@WebMvcTest` + `@AutoConfigureMockMvc(addFilters = false)`.

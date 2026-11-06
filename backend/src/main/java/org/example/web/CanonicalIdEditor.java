@@ -8,8 +8,8 @@ import java.util.regex.Pattern;
  * sign, leading zeros or whitespace, e.g. {@code 26}.
  *
  * <p>The default conversion of Spring ({@code NumberUtils.parseNumber}) is lenient: it strips the
- * whitespace and decodes hexadecimal numbers, so {@code /defects/0x1A}, {@code /defects/%231A},
- * {@code /defects/+26}, {@code /defects/026} and {@code /defects/%2026} would all be the defect 26.
+ * whitespace and decodes hexadecimal numbers, so {@code /tickets/0x1A}, {@code /tickets/%231A},
+ * {@code /tickets/+26}, {@code /tickets/026} and {@code /tickets/%2026} would all be the ticket 26.
  * Such aliases make one resource appear under many URLs (caches, logs, future access rules) and
  * turn a client error into a hit on another resource. Here they are rejected instead.
  *

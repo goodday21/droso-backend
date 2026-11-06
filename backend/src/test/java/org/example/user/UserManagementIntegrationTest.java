@@ -222,7 +222,7 @@ class UserManagementIntegrationTest extends PostgresIntegrationTest {
         // The old token still works, with the permissions of the new role.
         mockMvc.perform(get("/api/v1/auth/me").with(authorization(userBearer)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.permissions", Matchers.hasItem("DEFECT_UPDATE")));
+                .andExpect(jsonPath("$.permissions", Matchers.hasItem("TICKET_UPDATE")));
     }
 
     @Test

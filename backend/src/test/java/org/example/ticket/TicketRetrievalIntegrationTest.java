@@ -1,4 +1,4 @@
-package org.example.defect;
+package org.example.ticket;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.example.support.TestUsers.authorization;
@@ -34,17 +34,17 @@ import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * {@code GET /api/v1/defects/{id}} through the whole application against a real PostgreSQL server
+ * {@code GET /api/v1/tickets/{id}} through the whole application against a real PostgreSQL server
  * whose schema was created by the Flyway migrations.
  *
- * <p>Most defects are inserted with plain JDBC, independently of JPA and of the POST endpoint, so
+ * <p>Most tickets are inserted with plain JDBC, independently of JPA and of the POST endpoint, so
  * that every column, including two different timestamps, is known exactly. That the GET writes
  * nothing is checked on the row itself, including its system column {@code xmin}.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
-    private static final String URL = "/api/v1/defects";
+class TicketRetrievalIntegrationTest extends PostgresIntegrationTest {
+    private static final String URL = "/api/v1/tickets";
 
     /** ISO-8601 in UTC; {@code Instant} drops the trailing zero groups of the fraction. */
     private static final String ISO_INSTANT = "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3}|\\.\\d{6})?Z";
@@ -72,15 +72,15 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
         bearer = TestUsers.bearer(tokens, TestUsers.create(users, Role.USER));
     }
 
-    // ---------------------------------------------------------------- existing defect
+    // ---------------------------------------------------------------- existing ticket
 
     @Test
-    @DisplayName("a stored defect is answered with 200 and every column of its row")
-    void returnsStoredDefect() throws Exception {
+    @DisplayName("a stored ticket is answered with 200 and every column of its row")
+    void returnsStoredTicket() throws Exception {
         long id = insert("Profile changes are not saved", "Изменения теряются", "1. Open\n2. Save",
                 "Saved", "Not saved 😀", "CRITICAL",
                 "2026-01-02T03:04:05.123456Z", "2026-03-04T05:06:07.654321Z");
-        jdbc.update("UPDATE defects SET type = 'BUG', status = 'WAITING_FOR_FIX' WHERE id = ?", id);
+        jdbc.update("UPDATE tickets SET type = 'BUG', status = 'WAITING_FOR_FIX' WHERE id = ?", id);
 
         mockMvc.perform(get(URL + "/{id}", id).with(authorization(bearer)))
                 .andExpect(status().isOk())
@@ -101,12 +101,12 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("the author is answered as the id of the user; a defect from before V6 has none (null)")
+    @DisplayName("the author is answered as the id of the user; a ticket from before V6 has none (null)")
     void author() throws Exception {
         long author = TestUsers.create(users, Role.MANAGER).getId();
         long id = insert("Crash on start", null, null, null, null, "LOW",
                 "2026-01-02T03:04:05Z", "2026-01-02T03:04:05Z");
-        jdbc.update("UPDATE defects SET created_by = ? WHERE id = ?", author, id);
+        jdbc.update("UPDATE tickets SET created_by = ? WHERE id = ?", author, id);
 
         mockMvc.perform(get(URL + "/{id}", id).with(authorization(bearer)))
                 .andExpect(status().isOk())
@@ -142,20 +142,20 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("each id answers its own defect")
-    void eachIdAnswersItsDefect() throws Exception {
-        long first = insert("First defect", null, null, null, null, "LOW", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z");
-        long second = insert("Second defect", null, null, null, null, "HIGH", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z");
+    @DisplayName("each id answers its own ticket")
+    void eachIdAnswersItsTicket() throws Exception {
+        long first = insert("First ticket", null, null, null, null, "LOW", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z");
+        long second = insert("Second ticket", null, null, null, null, "HIGH", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z");
 
-        mockMvc.perform(get(URL + "/{id}", first).with(authorization(bearer))).andExpect(jsonPath("$.title").value("First defect"));
-        mockMvc.perform(get(URL + "/{id}", second).with(authorization(bearer))).andExpect(jsonPath("$.title").value("Second defect"));
+        mockMvc.perform(get(URL + "/{id}", first).with(authorization(bearer))).andExpect(jsonPath("$.title").value("First ticket"));
+        mockMvc.perform(get(URL + "/{id}", second).with(authorization(bearer))).andExpect(jsonPath("$.title").value("Second ticket"));
     }
 
     // ---------------------------------------------------------------- POST, then GET
 
     @Test
-    @DisplayName("a defect created with POST is read back by a separate GET of its Location")
-    void createdDefectIsReadBack() throws Exception {
+    @DisplayName("a ticket created with POST is read back by a separate GET of its Location")
+    void createdTicketIsReadBack() throws Exception {
         ResultActions created = mockMvc.perform(post(URL).with(authorization(bearer)).contentType(MediaType.APPLICATION_JSON).content("""
                         {
                           "title": "  Login fails  ",
@@ -212,12 +212,12 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
         assertThat(row(id)).isEqualTo(before);
     }
 
-    // ---------------------------------------------------------------- missing defect
+    // ---------------------------------------------------------------- missing ticket
 
     @ParameterizedTest
     @ValueSource(longs = {1, 424242, Long.MAX_VALUE})
-    @DisplayName("a missing defect answers 404 RESOURCE_NOT_FOUND without naming the resource or the id")
-    void missingDefect(long id) throws Exception {
+    @DisplayName("a missing ticket answers 404 RESOURCE_NOT_FOUND without naming the resource or the id")
+    void missingTicket(long id) throws Exception {
         String body = body(mockMvc.perform(get(URL + "/{id}", id).with(authorization(bearer)))
                 .andExpect(status().isNotFound())
                 .andExpect(header().string("Content-Type", Matchers.startsWith(MediaType.APPLICATION_JSON_VALUE)))
@@ -234,9 +234,9 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     @DisplayName("a removed row is not found any more")
-    void removedDefect() throws Exception {
+    void removedTicket() throws Exception {
         long id = insert("Crash on start", null, null, null, null, "HIGH", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z");
-        jdbc.update("DELETE FROM defects WHERE id = ?", id);
+        jdbc.update("DELETE FROM tickets WHERE id = ?", id);
 
         mockMvc.perform(get(URL + "/{id}", id).with(authorization(bearer)))
                 .andExpect(status().isNotFound())
@@ -244,10 +244,10 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("a soft-deleted defect answers 404 RESOURCE_NOT_FOUND, although its row stays")
-    void softDeletedDefect() throws Exception {
+    @DisplayName("a soft-deleted ticket answers 404 RESOURCE_NOT_FOUND, although its row stays")
+    void softDeletedTicket() throws Exception {
         long id = insert("Crash on start", null, null, null, null, "HIGH", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z");
-        jdbc.update("UPDATE defects SET deleted_at = now() WHERE id = ?", id);
+        jdbc.update("UPDATE tickets SET deleted_at = now() WHERE id = ?", id);
 
         mockMvc.perform(get(URL + "/{id}", id).with(authorization(bearer)))
                 .andExpect(status().isNotFound())
@@ -259,15 +259,15 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
 
     /**
      * Not only what cannot be a number, but also what the lenient default conversion of Spring
-     * would turn into another id ({@code 0x1A} and {@code 026} would be the defect 26).
+     * would turn into another id ({@code 0x1A} and {@code 026} would be the ticket 26).
      */
     @ParameterizedTest
     @ValueSource(strings = {"abc", "1.5", "1e3", "1A", "9223372036854775808", "99999999999999999999",
             "0", "-1", "+26", "026", "0x1A", "#1A", " 26", "26 ", "١"})
     @DisplayName("an id that is not a canonical positive number answers 400 VALIDATION_ERROR for id")
     void invalidId(String id) throws Exception {
-        // The defect 26 exists, so that an alias of it would answer 200 instead of 400.
-        jdbc.update("INSERT INTO defects (id, title, priority, status, created_at, updated_at)"
+        // The ticket 26 exists, so that an alias of it would answer 200 instead of 400.
+        jdbc.update("INSERT INTO tickets (id, title, priority, status, created_at, updated_at)"
                 + " VALUES (26, 'Crash on start', 'HIGH', 'NEW', now(), now())");
 
         String body = body(mockMvc.perform(get(URL + "/{id}", id).with(authorization(bearer)))
@@ -307,7 +307,7 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
     private long insert(String title, String description, String steps, String expected, String actual,
             String priority, String createdAt, String updatedAt) {
         return jdbc.queryForObject("""
-                INSERT INTO defects (title, description, steps_to_reproduce, expected_result, actual_result,
+                INSERT INTO tickets (title, description, steps_to_reproduce, expected_result, actual_result,
                                      priority, status, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, 'NEW', ?, ?)
                 RETURNING id
@@ -317,15 +317,15 @@ class DefectRetrievalIntegrationTest extends PostgresIntegrationTest {
 
     /** Every column of the row plus the id of the transaction that wrote it. */
     private Map<String, Object> row(long id) {
-        return jdbc.queryForMap("SELECT xmin::text AS xmin, * FROM defects WHERE id = ?", id);
+        return jdbc.queryForMap("SELECT xmin::text AS xmin, * FROM tickets WHERE id = ?", id);
     }
 
     private long count() {
-        return jdbc.queryForObject("SELECT count(*) FROM defects", Long.class);
+        return jdbc.queryForObject("SELECT count(*) FROM tickets", Long.class);
     }
 
     private Instant timestamp(String column, long id) {
-        return jdbc.queryForObject("SELECT " + column + " FROM defects WHERE id = ?", OffsetDateTime.class, id)
+        return jdbc.queryForObject("SELECT " + column + " FROM tickets WHERE id = ?", OffsetDateTime.class, id)
                 .toInstant();
     }
 

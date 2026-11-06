@@ -51,8 +51,8 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest(properties = "droso.auth.registration-enabled=true")
 @AutoConfigureMockMvc
 class JwtAuthenticationIntegrationTest extends PostgresIntegrationTest {
-    /** Any protected endpoint; the defect does not exist, so an accepted token answers 404. */
-    private static final String PROTECTED = "/api/v1/defects/1";
+    /** Any protected endpoint; the ticket does not exist, so an accepted token answers 404. */
+    private static final String PROTECTED = "/api/v1/tickets/1";
     private static final String ME = "/api/v1/auth/me";
 
     private static final String UNAUTHORIZED =
@@ -156,7 +156,7 @@ class JwtAuthenticationIntegrationTest extends PostgresIntegrationTest {
         mockMvc.perform(get(ME).with(authorization("Bearer " + token)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value("MANAGER"))
-                .andExpect(jsonPath("$.permissions", Matchers.contains("DEFECT_READ", "DEFECT_CREATE", "DEFECT_UPDATE")));
+                .andExpect(jsonPath("$.permissions", Matchers.contains("TICKET_READ", "TICKET_CREATE", "TICKET_UPDATE")));
     }
 
     @Test
@@ -377,10 +377,10 @@ class JwtAuthenticationIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("a POST of a defect without a token answers 401 and stores nothing")
-    void createDefectWithoutToken() throws Exception {
-        assertUnauthorized(mockMvc.perform(post("/api/v1/defects").contentType(MediaType.APPLICATION_JSON)
+    @DisplayName("a POST of a ticket without a token answers 401 and stores nothing")
+    void createTicketWithoutToken() throws Exception {
+        assertUnauthorized(mockMvc.perform(post("/api/v1/tickets").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"title\": \"Crash on start\"}")), "Bearer");
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM defects", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM tickets", Integer.class)).isZero();
     }
 }

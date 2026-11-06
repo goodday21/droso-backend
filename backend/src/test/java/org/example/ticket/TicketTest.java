@@ -1,4 +1,4 @@
-package org.example.defect;
+package org.example.ticket;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
@@ -12,97 +12,97 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-class DefectTest {
+class TicketTest {
 
     /** The id of the reporting user; the entity does not check that it exists, the foreign key does. */
     private static final Long AUTHOR = 7L;
 
-    private static Defect withTitle(String title) {
-        return new Defect(title, null, null, null, null, null, null, AUTHOR);
+    private static Ticket withTitle(String title) {
+        return new Ticket(title, null, null, null, null, null, null, AUTHOR);
     }
 
     @Test
-    @DisplayName("a new defect has the priority MEDIUM when none is given")
+    @DisplayName("a new ticket has the priority MEDIUM when none is given")
     void defaultPriority() {
-        assertThat(withTitle("Login fails").getPriority()).isEqualTo(DefectPriority.MEDIUM);
+        assertThat(withTitle("Login fails").getPriority()).isEqualTo(TicketPriority.MEDIUM);
     }
 
     @Test
     @DisplayName("a given priority is kept")
     void givenPriority() {
-        Defect defect = new Defect("Login fails", null, null, null, null, DefectPriority.CRITICAL, null, AUTHOR);
+        Ticket ticket = new Ticket("Login fails", null, null, null, null, TicketPriority.CRITICAL, null, AUTHOR);
 
-        assertThat(defect.getPriority()).isEqualTo(DefectPriority.CRITICAL);
+        assertThat(ticket.getPriority()).isEqualTo(TicketPriority.CRITICAL);
     }
 
     @Test
-    @DisplayName("a new defect has the type FEATURE when none is given")
+    @DisplayName("a new ticket has the type FEATURE when none is given")
     void defaultType() {
-        assertThat(withTitle("Login fails").getType()).isEqualTo(DefectType.FEATURE);
+        assertThat(withTitle("Login fails").getType()).isEqualTo(TicketType.FEATURE);
     }
 
     @Test
     @DisplayName("a given type is kept")
     void givenType() {
-        Defect defect = new Defect("Login fails", null, null, null, null, null, DefectType.BUG, AUTHOR);
+        Ticket ticket = new Ticket("Login fails", null, null, null, null, null, TicketType.BUG, AUTHOR);
 
-        assertThat(defect.getType()).isEqualTo(DefectType.BUG);
+        assertThat(ticket.getType()).isEqualTo(TicketType.BUG);
     }
 
     @Test
-    @DisplayName("a new defect is active")
-    void newDefectIsActive() {
-        Defect defect = withTitle("Login fails");
+    @DisplayName("a new ticket is active")
+    void newTicketIsActive() {
+        Ticket ticket = withTitle("Login fails");
 
-        assertThat(defect.isActive()).isTrue();
-        assertThat(defect.getDeletedAt()).isNull();
+        assertThat(ticket.isActive()).isTrue();
+        assertThat(ticket.getDeletedAt()).isNull();
     }
 
     @Test
-    @DisplayName("a new defect always has the status NEW")
+    @DisplayName("a new ticket always has the status NEW")
     void statusIsNew() {
-        assertThat(withTitle("Login fails").getStatus()).isEqualTo(DefectStatus.NEW);
+        assertThat(withTitle("Login fails").getStatus()).isEqualTo(TicketStatus.NEW);
     }
 
     @Test
-    @DisplayName("a new defect has neither an id nor timestamps before it is persisted")
+    @DisplayName("a new ticket has neither an id nor timestamps before it is persisted")
     void noIdAndTimestampsBeforePersist() {
-        Defect defect = withTitle("Login fails");
+        Ticket ticket = withTitle("Login fails");
 
-        assertThat(defect.getId()).isNull();
-        assertThat(defect.getCreatedAt()).isNull();
-        assertThat(defect.getUpdatedAt()).isNull();
+        assertThat(ticket.getId()).isNull();
+        assertThat(ticket.getCreatedAt()).isNull();
+        assertThat(ticket.getUpdatedAt()).isNull();
     }
 
     @Test
     @DisplayName("the optional fields are kept as given")
     void optionalFields() {
-        Defect defect = new Defect("Login fails", "description", "steps", "expected", "actual", null, null, AUTHOR);
+        Ticket ticket = new Ticket("Login fails", "description", "steps", "expected", "actual", null, null, AUTHOR);
 
-        assertThat(defect.getDescription()).isEqualTo("description");
-        assertThat(defect.getStepsToReproduce()).isEqualTo("steps");
-        assertThat(defect.getExpectedResult()).isEqualTo("expected");
-        assertThat(defect.getActualResult()).isEqualTo("actual");
+        assertThat(ticket.getDescription()).isEqualTo("description");
+        assertThat(ticket.getStepsToReproduce()).isEqualTo("steps");
+        assertThat(ticket.getExpectedResult()).isEqualTo("expected");
+        assertThat(ticket.getActualResult()).isEqualTo("actual");
     }
 
     @Test
     @DisplayName("an optional field of invisible characters only is stored as null")
     void blankOptionalFieldsAreNull() {
-        Defect defect = new Defect("Login fails", "", "  \n\t ", "  ", "​﻿", null, null, AUTHOR);
+        Ticket ticket = new Ticket("Login fails", "", "  \n\t ", "  ", "​﻿", null, null, AUTHOR);
 
-        assertThat(defect.getDescription()).isNull();
-        assertThat(defect.getStepsToReproduce()).isNull();
-        assertThat(defect.getExpectedResult()).isNull();
-        assertThat(defect.getActualResult()).isNull();
+        assertThat(ticket.getDescription()).isNull();
+        assertThat(ticket.getStepsToReproduce()).isNull();
+        assertThat(ticket.getExpectedResult()).isNull();
+        assertThat(ticket.getActualResult()).isNull();
     }
 
     @Test
     @DisplayName("an optional field with visible text is kept as given, its whitespace included")
     void optionalFieldsAreNotTrimmed() {
-        Defect defect = new Defect("Login fails", " description\n", " steps", null, null, null, null, AUTHOR);
+        Ticket ticket = new Ticket("Login fails", " description\n", " steps", null, null, null, null, AUTHOR);
 
-        assertThat(defect.getDescription()).isEqualTo(" description\n");
-        assertThat(defect.getStepsToReproduce()).isEqualTo(" steps");
+        assertThat(ticket.getDescription()).isEqualTo(" description\n");
+        assertThat(ticket.getStepsToReproduce()).isEqualTo(" steps");
     }
 
     @Test
@@ -160,14 +160,14 @@ class DefectTest {
     @Test
     @DisplayName("persisting sets both timestamps to the same current moment, in microseconds")
     void timestampsAreInitialized() {
-        Defect defect = withTitle("Login fails");
+        Ticket ticket = withTitle("Login fails");
         Instant before = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
-        defect.initializeTimestamps();
+        ticket.initializeTimestamps();
 
         Instant after = Instant.now();
-        assertThat(defect.getCreatedAt()).isBetween(before, after);
-        assertThat(defect.getUpdatedAt()).isEqualTo(defect.getCreatedAt());
-        assertThat(defect.getCreatedAt().truncatedTo(ChronoUnit.MICROS)).isEqualTo(defect.getCreatedAt());
+        assertThat(ticket.getCreatedAt()).isBetween(before, after);
+        assertThat(ticket.getUpdatedAt()).isEqualTo(ticket.getCreatedAt());
+        assertThat(ticket.getCreatedAt().truncatedTo(ChronoUnit.MICROS)).isEqualTo(ticket.getCreatedAt());
     }
 }

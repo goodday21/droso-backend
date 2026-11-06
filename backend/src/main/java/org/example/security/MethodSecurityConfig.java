@@ -5,7 +5,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 
 /**
  * Turns on {@code @PreAuthorize}, with which the controllers require a
- * {@linkplain org.example.user.Permission permission} ({@code hasAuthority('DEFECT_READ')}), never a
+ * {@linkplain org.example.user.Permission permission} ({@code hasAuthority('TICKET_READ')}), never a
  * role. A denied call throws an {@code AccessDeniedException} inside Spring MVC, which
  * {@code ApiExceptionHandler} answers with {@code 403 FORBIDDEN}.
  *
